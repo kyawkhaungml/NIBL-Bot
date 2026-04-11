@@ -96,10 +96,18 @@ async function handleAddressReply(customer, body) {
     '🙌 Order confirmed! We\'re heading to pick it up now. We\'ll text you when we\'re on the way.'
   );
 
-  // Forward to operator
+  // Forward to operator with quick-reply commands
   const platformLabel = PLATFORM_LABELS[order.platform] || 'Unknown';
+  const shortPhone = phone.replace('whatsapp:', '');
   const operatorMsg =
-    `NEW ORDER 🛵\nCustomer: ${phone}\nPlatform: ${platformLabel}\nAddress: ${address}\nScreenshot: ${order.screenshot_url}`;
+    `NEW ORDER 🛵\n` +
+    `Customer: ${shortPhone}\n` +
+    `Platform: ${platformLabel}\n` +
+    `Address: ${address}\n` +
+    `Screenshot: ${order.screenshot_url}\n\n` +
+    `Quick commands:\n` +
+    `OTW ${shortPhone}\n` +
+    `DONE ${shortPhone}`;
 
   await sendMessage(process.env.OPERATOR_WHATSAPP, operatorMsg);
 }

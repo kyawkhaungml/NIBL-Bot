@@ -171,6 +171,35 @@ async function handleStats(operatorPhone) {
 }
 
 /**
+ * MSG <phone> <message>
+ * Manually send a custom message to a customer.
+ */
+async function handleMsg(operatorPhone, args) {
+  const spaceIdx = args.indexOf(' ');
+  if (spaceIdx === -1) {
+    await sendMessage(operatorPhone, 'Usage: MSG <phone> <your message>\nExample: MSG +19172792972 Running 10 min late, sorry!');
+    return;
+  }
+
+  let rawPhone = args.substring(0, spaceIdx).trim();
+  const message = args.substring(spaceIdx + 1).trim();
+
+  if (!rawPhone.startsWith('whatsapp:')) rawPhone = `whatsapp:${rawPhone}`;
+
+  if (!message) {
+    await sendMessage(operatorPhone, 'Usage: MSG <phone> <your message>');
+    return;
+  }
+
+  try {
+    await sendMessage(rawPhone, message);
+    await sendMessage(operatorPhone, `✅ Sent to ${rawPhone}`);
+  } catch (err) {
+    await sendMessage(operatorPhone, `❌ Failed to send: ${err.message}`);
+  }
+}
+
+/**
  * Main entry point — routes operator commands.
  */
 async function handleOperatorMessage(from, body) {
@@ -178,6 +207,11 @@ async function handleOperatorMessage(from, body) {
 
   switch (command) {
     case 'STATUS':    return handleStatus(from, args);
+    // Shorthand: OTW <phone> → marks on_the_way and texts customer
+    case 'OTW':       return handleStatus(from, `${args} on_the_way`);
+    // Shorthand: DONE <phone> → marks delivered and starts feedback
+    case 'DONE':      return handleStatus(from, `${args} delivered`);
+    case 'MSG':       return handleMsg(from, args);
     case 'BROADCAST': return handleBroadcast(from, args);
     case 'INVITE':    return handleInvite(from, args);
     case 'WAITLIST':  return handleWaitlist(from);
@@ -185,7 +219,7 @@ async function handleOperatorMessage(from, body) {
     default:
       await sendMessage(
         from,
-        'Operator commands:\nSTATUS <phone> <status>\nBROADCAST <msg>\nINVITE <phone>\nWAITLIST\nSTATS'
+        'Operator commands:\nOTW <phone> — order on the way\nDONE <phone> — mark delivered\nMSG <phone> <text> — send custom message\nINVITE <phone>\nBROADCAST <msg>\nWAITLIST\nSTATS'
       );
   }
 }

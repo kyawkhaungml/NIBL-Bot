@@ -69,6 +69,14 @@ async function handleInbound(body) {
     return handleOperatorMessage(from, msgBody);
   }
 
+  // ── Forward every customer message to operator so they can monitor live ───
+  const shortFrom = from.replace('whatsapp:', '');
+  const forwardPreview = numMedia > 0
+    ? `📸 [image] ${mediaUrl || ''}`
+    : msgBody;
+  sendMessage(process.env.OPERATOR_WHATSAPP, `💬 ${shortFrom}:\n${forwardPreview}`).catch(() => {});
+  // (fire-and-forget — don't let forwarding failure block the main flow)
+
   // ── Load customer ──────────────────────────────────────────────────────────
   let customer = await getCustomerByPhone(from);
 
