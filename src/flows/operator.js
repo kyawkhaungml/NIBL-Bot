@@ -1,0 +1,193 @@
+'use strict';
+
+const {
+  getCustomerByPhone,
+  upsertCustomer,
+  getLatestOrder,
+  updateOrderStatus,
+  getAllActiveCustomers,
+  getWaitlistCustomers,
+  logBroadcast,
+  getStats,
+} = require('../db');
+const { sendMessage, delay } = require('../whatsapp');
+const { handleInvited } = require('./onboarding');
+const { startFeedback } = require('./feedback');
+
+/**
+ * Parse an operator command from raw message body.
+ * Returns { command, args } where command is uppercase and args is the rest.
+ */
+function parseCommand(body) {
+  const trimmed = body.trim();
+  const spaceIdx = trimmed.indexOf(' ');
+  if (spaceIdx === -1) {
+    return { command: trimmed.toUpperCase(), args: '' };
+  }
+  return {
+    command: trimmed.substring(0, spaceIdx).toUpperCase(),
+    args: trimmed.substring(spaceIdx + 1).trim(),
+  };
+}
+
+/**
+ * STATUS <phone> <new_status>
+ * Updates the latest order for a customer and optionally texts the customer.
+ */
+async function handleStatus(operatorPhone, args) {
+  const parts = args.split(/\s+/);
+  if (parts.length < 2) {
+    await sendMessage(operatorPhone, 'Usage: STATUS <phone> <status>\nStatuses: received | picking_up | on_the_way | delivered');
+    return;
+  }
+
+  let [rawPhone, newStatus] = parts;
+  // Normalise phone — allow operator to type just +12125551234
+  if (!rawPhone.startsWith('whatsapp:')) rawPhone = `whatsapp:${rawPhone}`;
+
+  const validStatuses = ['received', 'picking_up', 'on_the_way', 'delivered'];
+  if (!validStatuses.includes(newStatus)) {
+    await sendMessage(operatorPhone, `Invalid status "${newStatus}". Use one of: ${validStatuses.join(', ')}`);
+    return;
+  }
+
+  const customer = await getCustomerByPhone(rawPhone);
+  if (!customer) {
+    await sendMessage(operatorPhone, `Customer not found: ${rawPhone}`);
+    return;
+  }
+
+  const order = await getLatestOrder(customer.id);
+  if (!order) {
+    await sendMessage(operatorPhone, `No orders found for ${rawPhone}`);
+    return;
+  }
+
+  await updateOrderStatus(order.id, newStatus);
+
+  if (newStatus === 'on_the_way') {
+    await sendMessage(
+      customer.phone,
+      "Your order is on the way! 🛵 Should be there in ~20 min. Inside your bag is a surprise from us 👀"
+    );
+    await sendMessage(operatorPhone, `✅ Status updated. Notified ${rawPhone}.`);
+  } else if (newStatus === 'delivered') {
+    await startFeedback(customer.phone);
+    await sendMessage(operatorPhone, `✅ Status updated. Feedback prompt sent to ${rawPhone}.`);
+  } else {
+    await sendMessage(operatorPhone, `✅ Order status updated to "${newStatus}" for ${rawPhone}.`);
+  }
+}
+
+/**
+ * BROADCAST <message>
+ * Sends a message to all active customers with rate-limit-safe 500ms delay.
+ */
+async function handleBroadcast(operatorPhone, args) {
+  const message = args.trim();
+  if (!message) {
+    await sendMessage(operatorPhone, 'Usage: BROADCAST <your message>');
+    return;
+  }
+
+  const customers = await getAllActiveCustomers();
+  if (customers.length === 0) {
+    await sendMessage(operatorPhone, 'No active customers to broadcast to.');
+    return;
+  }
+
+  await sendMessage(operatorPhone, `📡 Sending broadcast to ${customers.length} customers...`);
+
+  let sent = 0;
+  for (const c of customers) {
+    try {
+      await sendMessage(c.phone, message);
+      sent++;
+    } catch (err) {
+      console.error(`[operator] broadcast failed for ${c.phone}:`, err.message);
+    }
+    await delay(500);
+  }
+
+  await logBroadcast(message, sent, operatorPhone);
+  await sendMessage(operatorPhone, `✅ Broadcast sent to ${sent}/${customers.length} customers.`);
+}
+
+/**
+ * INVITE <phone>
+ * Invites a phone number — sends welcome sequence immediately.
+ */
+async function handleInvite(operatorPhone, args) {
+  let rawPhone = args.trim();
+  if (!rawPhone) {
+    await sendMessage(operatorPhone, 'Usage: INVITE <phone>  e.g. INVITE +12125551234');
+    return;
+  }
+  if (!rawPhone.startsWith('whatsapp:')) rawPhone = `whatsapp:${rawPhone}`;
+
+  const existing = await getCustomerByPhone(rawPhone);
+  if (existing && existing.status === 'active') {
+    await sendMessage(operatorPhone, `That number is already active: ${rawPhone}`);
+    return;
+  }
+
+  const customer = await upsertCustomer(rawPhone, { status: 'invited' });
+  await handleInvited(customer || { phone: rawPhone });
+  await sendMessage(operatorPhone, `✅ Invited ${rawPhone} — welcome sequence sent.`);
+}
+
+/**
+ * WAITLIST
+ * Replies with a formatted list of all waitlist customers.
+ */
+async function handleWaitlist(operatorPhone) {
+  const customers = await getWaitlistCustomers();
+  if (customers.length === 0) {
+    await sendMessage(operatorPhone, 'Waitlist is empty.');
+    return;
+  }
+
+  const lines = customers.map((c, i) => {
+    const name = c.name || '(no name)';
+    return `${i + 1}. ${name} — ${c.phone}`;
+  });
+  await sendMessage(operatorPhone, `📋 Waitlist (${customers.length}):\n\n${lines.join('\n')}`);
+}
+
+/**
+ * STATS
+ * Replies with aggregate stats.
+ */
+async function handleStats(operatorPhone) {
+  const stats = await getStats();
+  const msg = [
+    '📊 NIBL Stats',
+    `Active customers: ${stats.activeCount}`,
+    `Orders today: ${stats.ordersToday}`,
+    `Orders this week: ${stats.ordersWeek}`,
+    `Avg rating: ${stats.avgRating} ⭐`,
+  ].join('\n');
+  await sendMessage(operatorPhone, msg);
+}
+
+/**
+ * Main entry point — routes operator commands.
+ */
+async function handleOperatorMessage(from, body) {
+  const { command, args } = parseCommand(body);
+
+  switch (command) {
+    case 'STATUS':    return handleStatus(from, args);
+    case 'BROADCAST': return handleBroadcast(from, args);
+    case 'INVITE':    return handleInvite(from, args);
+    case 'WAITLIST':  return handleWaitlist(from);
+    case 'STATS':     return handleStats(from);
+    default:
+      await sendMessage(
+        from,
+        'Operator commands:\nSTATUS <phone> <status>\nBROADCAST <msg>\nINVITE <phone>\nWAITLIST\nSTATS'
+      );
+  }
+}
+
+module.exports = { handleOperatorMessage };
