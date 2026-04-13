@@ -157,11 +157,13 @@ async function updateOrderAddress(orderId, address) {
 
 // ─── Feedback helpers ────────────────────────────────────────────────────────
 
-async function createFeedback(orderId, customerId, rating) {
+async function createFeedback(orderId, customerId, rating, drinkRating = null) {
   try {
+    const record = { order_id: orderId, customer_id: customerId, rating };
+    if (drinkRating !== null) record.comment = `drink:${drinkRating}`;
     const { data, error } = await supabase
       .from('feedback')
-      .insert({ order_id: orderId, customer_id: customerId, rating })
+      .insert(record)
       .select()
       .single();
     if (error) throw error;

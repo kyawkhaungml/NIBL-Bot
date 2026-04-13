@@ -11,6 +11,7 @@ const {
   getStats,
 } = require('../db');
 const { sendMessage, delay } = require('../whatsapp');
+const { ADMINS } = require('../admins');
 const { handleInvited } = require('./onboarding');
 const { startFeedback } = require('./feedback');
 
@@ -68,7 +69,7 @@ async function handleStatus(operatorPhone, args) {
   if (newStatus === 'on_the_way') {
     await sendMessage(
       customer.phone,
-      "Your order is on the way! 🛵 Should be there in ~20 min. Inside your bag is a surprise from us 👀"
+      "Your order is on the way! 🛵 Inside your bag is a surprise from us 👀"
     );
     await sendMessage(operatorPhone, `✅ Status updated. Notified ${rawPhone}.`);
   } else if (newStatus === 'delivered') {
@@ -158,16 +159,57 @@ async function handleWaitlist(operatorPhone) {
  * STATS
  * Replies with aggregate stats.
  */
+function maskPhone(phone) {
+  const raw = phone.replace('whatsapp:', '');
+  return raw.slice(0, 2) + '******' + raw.slice(-4);
+}
+
 async function handleStats(operatorPhone) {
   const stats = await getStats();
+  const adminList = ADMINS.map(maskPhone).join(', ');
   const msg = [
     '📊 NIBL Stats',
     `Active customers: ${stats.activeCount}`,
     `Orders today: ${stats.ordersToday}`,
     `Orders this week: ${stats.ordersWeek}`,
     `Avg rating: ${stats.avgRating} ⭐`,
+    `Admins: ${adminList}`,
   ].join('\n');
   await sendMessage(operatorPhone, msg);
+}
+
+/**
+ * CONFIRM <phone> <eta_minutes> <driver_name>
+ * Sends the ETA + driver message to the customer after order is accepted.
+ */
+async function handleConfirm(operatorPhone, args) {
+  const parts = args.split(/\s+/);
+  if (parts.length < 3) {
+    await sendMessage(operatorPhone, 'Usage: CONFIRM <phone> <eta_minutes> <driver_name>\nExample: CONFIRM +19172792972 25 John');
+    return;
+  }
+
+  let [rawPhone, etaMinutes, ...driverParts] = parts;
+  const driverName = driverParts.join(' ');
+
+  if (!rawPhone.startsWith('whatsapp:')) rawPhone = `whatsapp:${rawPhone}`;
+
+  if (isNaN(parseInt(etaMinutes, 10))) {
+    await sendMessage(operatorPhone, `"${etaMinutes}" is not a valid number. Usage: CONFIRM <phone> <eta_minutes> <driver_name>`);
+    return;
+  }
+
+  const customer = await getCustomerByPhone(rawPhone);
+  if (!customer) {
+    await sendMessage(operatorPhone, `Customer not found: ${rawPhone}`);
+    return;
+  }
+
+  await sendMessage(
+    customer.phone,
+    `🕒 ETA: ${etaMinutes} minutes\n🚗 Driver: ${driverName}\nWe'll update you when we're en route.`
+  );
+  await sendMessage(operatorPhone, `✅ Confirmed for ${rawPhone}.`);
 }
 
 /**
@@ -211,6 +253,7 @@ async function handleOperatorMessage(from, body) {
     case 'OTW':       return handleStatus(from, `${args} on_the_way`);
     // Shorthand: DONE <phone> → marks delivered and starts feedback
     case 'DONE':      return handleStatus(from, `${args} delivered`);
+    case 'CONFIRM':   return handleConfirm(from, args);
     case 'MSG':       return handleMsg(from, args);
     case 'BROADCAST': return handleBroadcast(from, args);
     case 'INVITE':    return handleInvite(from, args);
@@ -219,7 +262,7 @@ async function handleOperatorMessage(from, body) {
     default:
       await sendMessage(
         from,
-        'Operator commands:\nOTW <phone> — order on the way\nDONE <phone> — mark delivered\nMSG <phone> <text> — send custom message\nINVITE <phone>\nBROADCAST <msg>\nWAITLIST\nSTATS'
+        'Operator commands:\nCONFIRM <phone> <mins> <driver> — send ETA + driver to customer\nOTW <phone> — order on the way\nDONE <phone> — mark delivered\nMSG <phone> <text> — send custom message\nINVITE <phone>\nBROADCAST <msg>\nWAITLIST\nSTATS'
       );
   }
 }

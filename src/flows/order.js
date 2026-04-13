@@ -93,7 +93,7 @@ async function handleAddressReply(customer, body) {
 
   await sendMessage(
     phone,
-    '🙌 Order confirmed! We\'re heading to pick it up now. We\'ll text you when we\'re on the way.'
+    "✅ Order accepted — first order 👀\nYou're all set. We're picking it up now."
   );
 
   // Forward to operator with quick-reply commands
@@ -106,6 +106,7 @@ async function handleAddressReply(customer, body) {
     `Address: ${address}\n` +
     `Screenshot: ${order.screenshot_url}\n\n` +
     `Quick commands:\n` +
+    `CONFIRM ${shortPhone} <mins> <driver>\n` +
     `OTW ${shortPhone}\n` +
     `DONE ${shortPhone}`;
 

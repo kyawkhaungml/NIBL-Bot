@@ -9,8 +9,9 @@ const { getCustomerByPhone, upsertCustomer, ensureReferralCode } = require('./db
 const { sendMessage } = require('./whatsapp');
 const { handleUnknown, handleInvited } = require('./flows/onboarding');
 const { handleImage, handlePlatformReply, handleAddressReply, handleCustomerStatusQuery } = require('./flows/order');
-const { handleRating, handleDrinkResponse } = require('./flows/feedback');
+const { handleFeedback } = require('./flows/feedback');
 const { handleOperatorMessage } = require('./flows/operator');
+const { isAdmin } = require('./admins');
 const { handleDealReply } = require('./flows/reengagement');
 
 // Start scheduler (registers cron jobs)
@@ -65,7 +66,7 @@ async function handleInbound(body) {
   console.log(`[webhook] ← ${from}: "${msgBody}" (media: ${numMedia})`);
 
   // ── Operator short-circuit ─────────────────────────────────────────────────
-  if (from === process.env.OPERATOR_WHATSAPP) {
+  if (isAdmin(from)) {
     return handleOperatorMessage(from, msgBody);
   }
 
@@ -156,15 +157,12 @@ async function handleInbound(body) {
     case 'awaiting_address':
       return handleAddressReply(customer, msgBody);
 
-    case 'awaiting_feedback_rating':
-      return handleRating(customer, msgBody);
-
-    case 'awaiting_feedback_drink':
-      return handleDrinkResponse(customer, msgBody);
+    case 'awaiting_feedback':
+      return handleFeedback(customer, msgBody);
 
     default:
-      // Idle active customer — unrecognised text
-      await sendMessage(from, "I didn't get that 🤔 Reply HELP for options, or send a screenshot to place an order 📸");
+      // Idle active customer — silently ignore unrecognised text/extra screenshots
+      break;
   }
 }
 
