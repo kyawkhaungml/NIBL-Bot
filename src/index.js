@@ -78,11 +78,10 @@ async function handleInbound(body) {
   const shortFrom = from.replace('whatsapp:', '');
   const claimant = getClaimant(from);
   const forwardTo = claimant ? [claimant] : ADMINS;
-  if (numMedia > 0 && mediaUrl) {
-    forwardTo.forEach(admin => sendMessage(admin, `📸 ${shortFrom}:\n${mediaUrl}`).catch(() => {}));
-  } else {
+  if (numMedia === 0) {
     forwardTo.forEach(admin => sendMessage(admin, `💬 ${shortFrom}:\n${msgBody}`).catch(() => {}));
   }
+  // Screenshots are not forwarded here — handleImage sends the full notification with commands.
   // (fire-and-forget — don't let forwarding failure block the main flow)
 
   // ── Load customer ──────────────────────────────────────────────────────────
