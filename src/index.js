@@ -6,7 +6,7 @@ const express = require('express');
 const twilio = require('twilio');
 
 const { getCustomerByPhone, upsertCustomer, ensureReferralCode } = require('./db');
-const { sendMessage, sendMediaMessage } = require('./whatsapp');
+const { sendMessage } = require('./whatsapp');
 const { handleUnknown, handleInvited } = require('./flows/onboarding');
 const { handleImage, handlePlatformReply, handleAddressReply, handleCustomerStatusQuery } = require('./flows/order');
 const { handleFeedback } = require('./flows/feedback');
@@ -14,7 +14,6 @@ const { handleOperatorMessage } = require('./flows/operator');
 const { isAdmin, ADMINS } = require('./admins');
 const { getClaimant } = require('./claims');
 const { handleDealReply } = require('./flows/reengagement');
-const { uploadMedia } = require('./media');
 
 // Start scheduler (registers cron jobs)
 // TODO: re-enable when re-engagement messages are ready
@@ -62,9 +61,8 @@ function validateTwilioSignature(req, res, next) {
 async function handleInbound(body) {
   const from = body.From || '';
   const msgBody = (body.Body || '').trim();
-  let mediaUrl = body.MediaUrl0 || null;
+  const mediaUrl = body.MediaUrl0 || null;
   const numMedia = parseInt(body.NumMedia || '0', 10);
-  const mediaContentType = body.MediaContentType0 || 'image/jpeg';
   const upperBody = msgBody.toUpperCase();
 
   console.log(`[webhook] ← ${from}: "${msgBody}" (media: ${numMedia})`);
@@ -74,13 +72,6 @@ async function handleInbound(body) {
     return handleOperatorMessage(from, msgBody);
   }
 
-  // ── Re-host Twilio media as a public Supabase Storage URL ─────────────────
-  // Twilio inbound media URLs require Basic auth — WhatsApp/Meta can't fetch
-  // them when delivering outbound messages, so images arrive broken.
-  if (numMedia > 0 && mediaUrl) {
-    mediaUrl = await uploadMedia(mediaUrl, mediaContentType);
-  }
-
   // ── Forward every customer message to operator(s) ─────────────────────────
   // If one admin has claimed this customer, only they receive the forward.
   // Otherwise broadcast to all admins (unclaimed conversation).
@@ -88,7 +79,7 @@ async function handleInbound(body) {
   const claimant = getClaimant(from);
   const forwardTo = claimant ? [claimant] : ADMINS;
   if (numMedia > 0 && mediaUrl) {
-    forwardTo.forEach(admin => sendMediaMessage(admin, `📸 ${shortFrom}`, mediaUrl).catch(() => {}));
+    forwardTo.forEach(admin => sendMessage(admin, `📸 ${shortFrom}:\n${mediaUrl}`).catch(() => {}));
   } else {
     forwardTo.forEach(admin => sendMessage(admin, `💬 ${shortFrom}:\n${msgBody}`).catch(() => {}));
   }

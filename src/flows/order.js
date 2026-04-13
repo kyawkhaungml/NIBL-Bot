@@ -7,7 +7,7 @@ const {
   updateOrderAddress,
   setCustomerState,
 } = require('../db');
-const { sendMessage, sendMediaMessage } = require('../whatsapp');
+const { sendMessage } = require('../whatsapp');
 const { ADMINS } = require('../admins');
 const { getClaimant } = require('../claims');
 
@@ -49,10 +49,11 @@ async function handleImage(customer, mediaUrl) {
   const shortPhone = phone.replace('whatsapp:', '');
   const caption =
     `📸 NEW SCREENSHOT\n` +
-    `Customer: ${shortPhone}\n\n` +
+    `Customer: ${shortPhone}\n` +
+    `Screenshot: ${order.screenshot_url}\n\n` +
     `SSCHECKED ${shortPhone}\n` +
     `BADSS ${shortPhone}`;
-  await Promise.all(ADMINS.map(admin => sendMediaMessage(admin, caption, order.screenshot_url)));
+  await Promise.all(ADMINS.map(admin => sendMessage(admin, caption)));
 }
 
 /**
