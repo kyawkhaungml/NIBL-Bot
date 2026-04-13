@@ -109,6 +109,7 @@ async function handleAddressReply(customer, body) {
     `Platform: ${platformLabel}\n` +
     `Address: ${address}\n` +
     `Screenshot: ${order.screenshot_url}\n\n` +
+    `BADAD ${shortPhone}\n` +
     `ACCEPT ${shortPhone}\n` +
     `REJECT-FAR ${shortPhone}\n` +
     `REJECT-FULL ${shortPhone}\n` +

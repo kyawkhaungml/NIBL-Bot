@@ -14,6 +14,7 @@ const { handleOperatorMessage } = require('./flows/operator');
 const { isAdmin, ADMINS } = require('./admins');
 const { getClaimant } = require('./claims');
 const { handleDealReply } = require('./flows/reengagement');
+const { uploadMedia } = require('./media');
 
 // Start scheduler (registers cron jobs)
 // TODO: re-enable when re-engagement messages are ready
@@ -61,8 +62,9 @@ function validateTwilioSignature(req, res, next) {
 async function handleInbound(body) {
   const from = body.From || '';
   const msgBody = (body.Body || '').trim();
-  const mediaUrl = body.MediaUrl0 || null;
+  let mediaUrl = body.MediaUrl0 || null;
   const numMedia = parseInt(body.NumMedia || '0', 10);
+  const mediaContentType = body.MediaContentType0 || 'image/jpeg';
   const upperBody = msgBody.toUpperCase();
 
   console.log(`[webhook] ← ${from}: "${msgBody}" (media: ${numMedia})`);
@@ -70,6 +72,13 @@ async function handleInbound(body) {
   // ── Operator short-circuit ─────────────────────────────────────────────────
   if (isAdmin(from)) {
     return handleOperatorMessage(from, msgBody);
+  }
+
+  // ── Re-host Twilio media as a public Supabase Storage URL ─────────────────
+  // Twilio inbound media URLs require Basic auth — WhatsApp/Meta can't fetch
+  // them when delivering outbound messages, so images arrive broken.
+  if (numMedia > 0 && mediaUrl) {
+    mediaUrl = await uploadMedia(mediaUrl, mediaContentType);
   }
 
   // ── Forward every customer message to operator(s) ─────────────────────────

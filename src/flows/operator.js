@@ -342,7 +342,7 @@ async function handleBadAD(operatorPhone, args){
   }
 
   releaseCustomer(rawPhone);
-  await setCustomerState(rawPhone, 'idle');
+  await setCustomerState(rawPhone, 'awaiting_address');
   await sendMessage(
     rawPhone,
     "❌ Need a valid address\nPlease check the address you sent and make sure it's correct.\nSend it again and we'll take another look 👇"
