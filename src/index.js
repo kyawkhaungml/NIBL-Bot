@@ -197,6 +197,6 @@ app.get('/health', (req, res) => {
 const PORT = parseInt(process.env.PORT || '3000', 10);
 app.listen(PORT, () => {
   console.log(`[nibl-bot] Listening on port ${PORT}`);
-  console.log(`[nibl-bot] Operator number: ${process.env.OPERATOR_WHATSAPP}`);
   console.log(`[nibl-bot] Twilio number:   ${process.env.TWILIO_WHATSAPP_NUMBER}`);
+  console.log(`[nibl-bot] Admins (${ADMINS.length}): ${ADMINS.join(', ')}`);
 });

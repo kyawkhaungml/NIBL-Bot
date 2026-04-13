@@ -36,9 +36,19 @@ async function handleInvited(customer) {
   const phone = customer.phone;
 
   await sendMessages(phone, [
-    'Welcome to NIBL 🎉 You\'re in! Here\'s how it works:',
-    'Order anything on DoorDash or UberEats → screenshot your order → text it here. We pick it up, deliver it to you for FREE, and include a surprise drink 🥤',
-    'Ready? Just send us your order screenshot whenever you\'re ready. We\'re available 11am–10pm daily. Reply HELP anytime for assistance.',
+    'Welcome to NIBL 🎉 You\'re in!',
+
+    `Here's how it works:
+1.Order on DoorDash or Uber Eats
+2.Screenshot the full order (items + total + address)
+3.Send it here
+We'll pick it up and deliver it to you for free
+🥤 Your first order includes a free drink
+After that, we'll include drinks only when they match your order
+Once you send your order, we'll confirm + send an ETA.
+⚠️ Limited slots per time window`,
+    
+    'Send your order whenever you\'re ready 👇',
   ]);
 
   await upsertCustomer(phone, { status: 'active' });
