@@ -9,6 +9,7 @@ const {
 } = require('../db');
 const { sendMessage, sendMediaMessage } = require('../whatsapp');
 const { ADMINS } = require('../admins');
+const { getClaimant } = require('../claims');
 
 const PLATFORM_MAP = {
   '1': 'doordash',
@@ -99,7 +100,7 @@ async function handleAddressReply(customer, body) {
   await setCustomerState(phone, 'awaiting_acceptance');
   await sendMessage(phone, "Got your address! 📍 Checking serviceability — we'll confirm shortly.");
 
-  // Notify admins — they must send ACCEPT or REJECT-* <phone> to action the order
+  // Notify only the claiming admin (whoever did SSCHECKED), or all admins if unclaimed
   const platformLabel = PLATFORM_LABELS[order.platform] || 'Unknown';
   const shortPhone = phone.replace('whatsapp:', '');
   const adminMsg =
@@ -115,7 +116,9 @@ async function handleAddressReply(customer, body) {
     `OTW ${shortPhone}\n` +
     `DONE ${shortPhone}`;
 
-  await Promise.all(ADMINS.map(admin => sendMessage(admin, adminMsg)));
+  const claimant = getClaimant(phone);
+  const recipients = claimant ? [claimant] : ADMINS;
+  await Promise.all(recipients.map(admin => sendMessage(admin, adminMsg)));
 }
 
 /**

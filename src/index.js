@@ -6,7 +6,7 @@ const express = require('express');
 const twilio = require('twilio');
 
 const { getCustomerByPhone, upsertCustomer, ensureReferralCode } = require('./db');
-const { sendMessage } = require('./whatsapp');
+const { sendMessage, sendMediaMessage } = require('./whatsapp');
 const { handleUnknown, handleInvited } = require('./flows/onboarding');
 const { handleImage, handlePlatformReply, handleAddressReply, handleCustomerStatusQuery } = require('./flows/order');
 const { handleFeedback } = require('./flows/feedback');
@@ -76,12 +76,13 @@ async function handleInbound(body) {
   // If one admin has claimed this customer, only they receive the forward.
   // Otherwise broadcast to all admins (unclaimed conversation).
   const shortFrom = from.replace('whatsapp:', '');
-  const forwardPreview = numMedia > 0
-    ? `📸 [image] ${mediaUrl || ''}`
-    : msgBody;
   const claimant = getClaimant(from);
   const forwardTo = claimant ? [claimant] : ADMINS;
-  forwardTo.forEach(admin => sendMessage(admin, `💬 ${shortFrom}:\n${forwardPreview}`).catch(() => {}));
+  if (numMedia > 0 && mediaUrl) {
+    forwardTo.forEach(admin => sendMediaMessage(admin, `📸 ${shortFrom}`, mediaUrl).catch(() => {}));
+  } else {
+    forwardTo.forEach(admin => sendMessage(admin, `💬 ${shortFrom}:\n${msgBody}`).catch(() => {}));
+  }
   // (fire-and-forget — don't let forwarding failure block the main flow)
 
   // ── Load customer ──────────────────────────────────────────────────────────

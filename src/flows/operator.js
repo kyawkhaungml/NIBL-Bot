@@ -323,7 +323,32 @@ async function handleBadSS(operatorPhone, args) {
   );
   await sendMessage(operatorPhone, `✅ Bad screenshot message sent to ${rawPhone}.`);
 }
+/**
+ * BADAD <phone>
+ * Tells the customer their address was not valid and asks them to resend.
+ */
+async function handleBadAD(operatorPhone, args){
+  let rawPhone = args.trim();
+  if(!rawPhone){
+    await sendMessage(operatorPhone, 'Usage: BADAD <phone>');
+    return;
+  }
+  if (!rawPhone.startsWith('whatsapp:')) rawPhone = `whatsapp:${rawPhone}`;
 
+  const customer = await getCustomerByPhone(rawPhone);
+  if (!customer) {
+    await sendMessage(operatorPhone, `Customer not found: ${rawPhone}`);
+    return;
+  }
+
+  releaseCustomer(rawPhone);
+  await setCustomerState(rawPhone, 'idle');
+  await sendMessage(
+    rawPhone,
+    "❌ Need a valid address\nPlease check the address you sent and make sure it's correct.\nSend it again and we'll take another look 👇"
+  );
+  await sendMessage(operatorPhone, `✅ Bad address message sent to ${rawPhone}.`);
+}
 /**
  * CONFIRM <phone> <eta_minutes> <driver_name>
  * Sends the ETA + driver message to the customer after order is accepted.
@@ -398,6 +423,7 @@ async function handleOperatorMessage(from, body) {
   switch (command) {
     case 'SSCHECKED':    return handleSSChecked(from, args);
     case 'BADSS':        return handleBadSS(from, args);
+    case 'BADAD':        return handleBadAD(from, args);
     case 'ACCEPT':       return handleAccept(from, args);
     case 'REJECT-FAR':   return handleRejectFar(from, args);
     case 'REJECT-FULL':  return handleRejectFull(from, args);
@@ -416,7 +442,7 @@ async function handleOperatorMessage(from, body) {
     default:
       await sendMessage(
         from,
-        'Operator commands:\nSSCHECKED <phone> — approve screenshot\nBADSS <phone> — unclear screenshot, ask to resend\nACCEPT <phone> — confirm order serviceability\nREJECT-FAR <phone> — reject: out of range\nREJECT-FULL <phone> — reject: window full\nCONFIRM <phone> <mins> <driver> — send ETA + driver\nOTW <phone> — order on the way\nDONE <phone> — mark delivered\nMSG <phone> <text> — send custom message\nINVITE <phone>\nBROADCAST <msg>\nWAITLIST\nSTATS'
+        'Operator commands:\nSSCHECKED <phone> — approve screenshot\nBADSS <phone> — unclear screenshot, ask to resend\nBADAD <phone> — invalid address, ask to resend\nACCEPT <phone> — confirm order serviceability\nREJECT-FAR <phone> — reject: out of range\nREJECT-FULL <phone> — reject: window full\nCONFIRM <phone> <mins> <driver> — send ETA + driver\nOTW <phone> — order on the way\nDONE <phone> — mark delivered\nMSG <phone> <text> — send custom message\nINVITE <phone>\nBROADCAST <msg>\nWAITLIST\nSTATS'
       );
   }
 }
