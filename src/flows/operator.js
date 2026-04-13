@@ -13,6 +13,7 @@ const {
 } = require('../db');
 const { sendMessage, delay } = require('../whatsapp');
 const { ADMINS } = require('../admins');
+const { claimCustomer, releaseCustomer } = require('../claims');
 const { handleInvited } = require('./onboarding');
 const { startFeedback } = require('./feedback');
 
@@ -68,12 +69,14 @@ async function handleStatus(operatorPhone, args) {
   await updateOrderStatus(order.id, newStatus);
 
   if (newStatus === 'on_the_way') {
+    claimCustomer(rawPhone, operatorPhone);
     await sendMessage(
       customer.phone,
       "Your order is on the way! 🛵 Inside your bag is a surprise from us 👀"
     );
     await sendMessage(operatorPhone, `✅ Status updated. Notified ${rawPhone}.`);
   } else if (newStatus === 'delivered') {
+    releaseCustomer(rawPhone);
     await startFeedback(customer.phone);
     await sendMessage(operatorPhone, `✅ Status updated. Feedback prompt sent to ${rawPhone}.`);
   } else {
@@ -197,10 +200,11 @@ async function handleSSChecked(operatorPhone, args) {
     return;
   }
 
+  claimCustomer(rawPhone, operatorPhone);
   await setCustomerState(rawPhone, 'awaiting_platform');
   await sendMessage(
     rawPhone,
-    'Got it! 📸 We can see your order. What platform is this from?\n\nReply:\n1 — DoorDash\n2 — UberEats\n3 — Other'
+    'Your order screenshot is verified! 📸 What platform is this from?\n\nReply:\n1 — DoorDash\n2 — UberEats\n3 — Other'
   );
   await sendMessage(operatorPhone, `✅ Screenshot approved. Platform question sent to ${rawPhone}.`);
 }
@@ -229,6 +233,7 @@ async function handleAccept(operatorPhone, args) {
     return;
   }
 
+  claimCustomer(rawPhone, operatorPhone);
   await updateOrderStatus(order.id, 'picking_up');
   await setCustomerState(rawPhone, 'idle');
   await sendMessage(
@@ -256,6 +261,7 @@ async function handleRejectFar(operatorPhone, args) {
     return;
   }
 
+  releaseCustomer(rawPhone);
   await setCustomerState(rawPhone, 'idle');
   await sendMessage(
     rawPhone,
@@ -282,6 +288,7 @@ async function handleRejectFull(operatorPhone, args) {
     return;
   }
 
+  releaseCustomer(rawPhone);
   await setCustomerState(rawPhone, 'idle');
   await sendMessage(
     rawPhone,
@@ -308,6 +315,7 @@ async function handleBadSS(operatorPhone, args) {
     return;
   }
 
+  releaseCustomer(rawPhone);
   await setCustomerState(rawPhone, 'idle');
   await sendMessage(
     rawPhone,
@@ -343,6 +351,7 @@ async function handleConfirm(operatorPhone, args) {
     return;
   }
 
+  claimCustomer(rawPhone, operatorPhone);
   await sendMessage(
     customer.phone,
     `🕒 ETA: ${etaMinutes} minutes\n🚗 Driver: ${driverName}\nWe'll update you when we're en route.`
@@ -372,6 +381,7 @@ async function handleMsg(operatorPhone, args) {
   }
 
   try {
+    claimCustomer(rawPhone, operatorPhone);
     await sendMessage(rawPhone, message);
     await sendMessage(operatorPhone, `✅ Sent to ${rawPhone}`);
   } catch (err) {

@@ -12,6 +12,7 @@ const { handleImage, handlePlatformReply, handleAddressReply, handleCustomerStat
 const { handleFeedback } = require('./flows/feedback');
 const { handleOperatorMessage } = require('./flows/operator');
 const { isAdmin, ADMINS } = require('./admins');
+const { getClaimant } = require('./claims');
 const { handleDealReply } = require('./flows/reengagement');
 
 // Start scheduler (registers cron jobs)
@@ -71,12 +72,16 @@ async function handleInbound(body) {
     return handleOperatorMessage(from, msgBody);
   }
 
-  // ── Forward every customer message to operator so they can monitor live ───
+  // ── Forward every customer message to operator(s) ─────────────────────────
+  // If one admin has claimed this customer, only they receive the forward.
+  // Otherwise broadcast to all admins (unclaimed conversation).
   const shortFrom = from.replace('whatsapp:', '');
   const forwardPreview = numMedia > 0
     ? `📸 [image] ${mediaUrl || ''}`
     : msgBody;
-  ADMINS.forEach(admin => sendMessage(admin, `💬 ${shortFrom}:\n${forwardPreview}`).catch(() => {}));
+  const claimant = getClaimant(from);
+  const forwardTo = claimant ? [claimant] : ADMINS;
+  forwardTo.forEach(admin => sendMessage(admin, `💬 ${shortFrom}:\n${forwardPreview}`).catch(() => {}));
   // (fire-and-forget — don't let forwarding failure block the main flow)
 
   // ── Load customer ──────────────────────────────────────────────────────────
