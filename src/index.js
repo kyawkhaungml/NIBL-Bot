@@ -11,7 +11,7 @@ const { handleUnknown, handleInvited } = require('./flows/onboarding');
 const { handleImage, handlePlatformReply, handleAddressReply, handleCustomerStatusQuery } = require('./flows/order');
 const { handleFeedback } = require('./flows/feedback');
 const { handleOperatorMessage } = require('./flows/operator');
-const { isAdmin } = require('./admins');
+const { isAdmin, ADMINS } = require('./admins');
 const { handleDealReply } = require('./flows/reengagement');
 
 // Start scheduler (registers cron jobs)
@@ -75,7 +75,7 @@ async function handleInbound(body) {
   const forwardPreview = numMedia > 0
     ? `📸 [image] ${mediaUrl || ''}`
     : msgBody;
-  sendMessage(process.env.OPERATOR_WHATSAPP, `💬 ${shortFrom}:\n${forwardPreview}`).catch(() => {});
+  ADMINS.forEach(admin => sendMessage(admin, `💬 ${shortFrom}:\n${forwardPreview}`).catch(() => {}));
   // (fire-and-forget — don't let forwarding failure block the main flow)
 
   // ── Load customer ──────────────────────────────────────────────────────────

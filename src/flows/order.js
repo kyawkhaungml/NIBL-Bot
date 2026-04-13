@@ -8,6 +8,7 @@ const {
   setCustomerState,
 } = require('../db');
 const { sendMessage } = require('../whatsapp');
+const { ADMINS } = require('../admins');
 
 const PLATFORM_MAP = {
   '1': 'doordash',
@@ -110,7 +111,7 @@ async function handleAddressReply(customer, body) {
     `OTW ${shortPhone}\n` +
     `DONE ${shortPhone}`;
 
-  await sendMessage(process.env.OPERATOR_WHATSAPP, operatorMsg);
+  await Promise.all(ADMINS.map(admin => sendMessage(admin, operatorMsg)));
 }
 
 /**
