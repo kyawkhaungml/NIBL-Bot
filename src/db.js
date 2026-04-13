@@ -147,7 +147,7 @@ async function updateOrderAddress(orderId, address) {
   try {
     const { error } = await supabase
       .from('orders')
-      .update({ delivery_address: address, status: 'picking_up' })
+      .update({ delivery_address: address })
       .eq('id', orderId);
     if (error) throw error;
   } catch (err) {

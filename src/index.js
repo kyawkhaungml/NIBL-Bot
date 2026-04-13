@@ -15,7 +15,8 @@ const { isAdmin, ADMINS } = require('./admins');
 const { handleDealReply } = require('./flows/reengagement');
 
 // Start scheduler (registers cron jobs)
-require('./scheduler');
+// TODO: re-enable when re-engagement messages are ready
+// require('./scheduler');
 
 const app = express();
 

@@ -31,6 +31,7 @@ const STATUS_MESSAGES = {
 
 /**
  * Customer sends an image (order screenshot).
+ * Sets state to awaiting_ss_check — admin must send SSCHECKED <phone> to proceed.
  */
 async function handleImage(customer, mediaUrl) {
   const phone = customer.phone;
@@ -41,11 +42,17 @@ async function handleImage(customer, mediaUrl) {
     return;
   }
 
-  await setCustomerState(phone, 'awaiting_platform');
-  await sendMessage(
-    phone,
-    'Got it! 📸 We can see your order. What platform is this from?\n\nReply:\n1 — DoorDash\n2 — UberEats\n3 — Other'
-  );
+  await setCustomerState(phone, 'awaiting_ss_check');
+  await sendMessage(phone, "📸 Got it! We're reviewing your order now — we'll message you shortly.");
+
+  const shortPhone = phone.replace('whatsapp:', '');
+  const adminMsg =
+    `📸 NEW SCREENSHOT\n` +
+    `Customer: ${shortPhone}\n` +
+    `Screenshot: ${order.screenshot_url}\n\n` +
+    `SSCHECKED ${shortPhone}\n` +
+    `BADSS ${shortPhone}`;
+  await Promise.all(ADMINS.map(admin => sendMessage(admin, adminMsg)));
 }
 
 /**
@@ -90,28 +97,26 @@ async function handleAddressReply(customer, body) {
   }
 
   await updateOrderAddress(order.id, address);
-  await setCustomerState(phone, 'idle');
+  await setCustomerState(phone, 'awaiting_acceptance');
+  await sendMessage(phone, "Got your address! 📍 Checking serviceability — we'll confirm shortly.");
 
-  await sendMessage(
-    phone,
-    "✅ Order accepted — first order 👀\nYou're all set. We're picking it up now."
-  );
-
-  // Forward to operator with quick-reply commands
+  // Notify admins — they must send ACCEPT or REJECT-* <phone> to action the order
   const platformLabel = PLATFORM_LABELS[order.platform] || 'Unknown';
   const shortPhone = phone.replace('whatsapp:', '');
-  const operatorMsg =
-    `NEW ORDER 🛵\n` +
+  const adminMsg =
+    `📍 ADDRESS RECEIVED\n` +
     `Customer: ${shortPhone}\n` +
     `Platform: ${platformLabel}\n` +
     `Address: ${address}\n` +
     `Screenshot: ${order.screenshot_url}\n\n` +
-    `Quick commands:\n` +
+    `ACCEPT ${shortPhone}\n` +
+    `REJECT-FAR ${shortPhone}\n` +
+    `REJECT-FULL ${shortPhone}\n` +
     `CONFIRM ${shortPhone} <mins> <driver>\n` +
     `OTW ${shortPhone}\n` +
     `DONE ${shortPhone}`;
 
-  await Promise.all(ADMINS.map(admin => sendMessage(admin, operatorMsg)));
+  await Promise.all(ADMINS.map(admin => sendMessage(admin, adminMsg)));
 }
 
 /**

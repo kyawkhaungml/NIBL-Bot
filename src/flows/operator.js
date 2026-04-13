@@ -5,6 +5,7 @@ const {
   upsertCustomer,
   getLatestOrder,
   updateOrderStatus,
+  setCustomerState,
   getAllActiveCustomers,
   getWaitlistCustomers,
   logBroadcast,
@@ -179,6 +180,143 @@ async function handleStats(operatorPhone) {
 }
 
 /**
+ * SSCHECKED <phone>
+ * Admin has verified the screenshot — triggers the platform question to the customer.
+ */
+async function handleSSChecked(operatorPhone, args) {
+  let rawPhone = args.trim();
+  if (!rawPhone) {
+    await sendMessage(operatorPhone, 'Usage: SSCHECKED <phone>');
+    return;
+  }
+  if (!rawPhone.startsWith('whatsapp:')) rawPhone = `whatsapp:${rawPhone}`;
+
+  const customer = await getCustomerByPhone(rawPhone);
+  if (!customer) {
+    await sendMessage(operatorPhone, `Customer not found: ${rawPhone}`);
+    return;
+  }
+
+  await setCustomerState(rawPhone, 'awaiting_platform');
+  await sendMessage(
+    rawPhone,
+    'Got it! 📸 We can see your order. What platform is this from?\n\nReply:\n1 — DoorDash\n2 — UberEats\n3 — Other'
+  );
+  await sendMessage(operatorPhone, `✅ Screenshot approved. Platform question sent to ${rawPhone}.`);
+}
+
+/**
+ * ACCEPT <phone>
+ * Admin has confirmed serviceability — sends the order confirmation to the customer.
+ */
+async function handleAccept(operatorPhone, args) {
+  let rawPhone = args.trim();
+  if (!rawPhone) {
+    await sendMessage(operatorPhone, 'Usage: ACCEPT <phone>');
+    return;
+  }
+  if (!rawPhone.startsWith('whatsapp:')) rawPhone = `whatsapp:${rawPhone}`;
+
+  const customer = await getCustomerByPhone(rawPhone);
+  if (!customer) {
+    await sendMessage(operatorPhone, `Customer not found: ${rawPhone}`);
+    return;
+  }
+
+  const order = await getLatestOrder(customer.id);
+  if (!order) {
+    await sendMessage(operatorPhone, `No orders found for ${rawPhone}`);
+    return;
+  }
+
+  await updateOrderStatus(order.id, 'picking_up');
+  await setCustomerState(rawPhone, 'idle');
+  await sendMessage(
+    rawPhone,
+    "✅ Order accepted — first order 👀\nYou're all set. We're picking it up now."
+  );
+  await sendMessage(operatorPhone, `✅ Order accepted. Confirmation sent to ${rawPhone}.`);
+}
+
+/**
+ * REJECT-FAR <phone>
+ * Rejects the order — drop-off is out of range.
+ */
+async function handleRejectFar(operatorPhone, args) {
+  let rawPhone = args.trim();
+  if (!rawPhone) {
+    await sendMessage(operatorPhone, 'Usage: REJECT-FAR <phone>');
+    return;
+  }
+  if (!rawPhone.startsWith('whatsapp:')) rawPhone = `whatsapp:${rawPhone}`;
+
+  const customer = await getCustomerByPhone(rawPhone);
+  if (!customer) {
+    await sendMessage(operatorPhone, `Customer not found: ${rawPhone}`);
+    return;
+  }
+
+  await setCustomerState(rawPhone, 'idle');
+  await sendMessage(
+    rawPhone,
+    "❌ Outside our current range\nThis drop-off is a bit too far for this run.\nWe'll be expanding zones soon — or try another order within range."
+  );
+  await sendMessage(operatorPhone, `✅ Rejection sent to ${rawPhone}.`);
+}
+
+/**
+ * REJECT-FULL <phone>
+ * Rejects the order — delivery window is full.
+ */
+async function handleRejectFull(operatorPhone, args) {
+  let rawPhone = args.trim();
+  if (!rawPhone) {
+    await sendMessage(operatorPhone, 'Usage: REJECT-FULL <phone>');
+    return;
+  }
+  if (!rawPhone.startsWith('whatsapp:')) rawPhone = `whatsapp:${rawPhone}`;
+
+  const customer = await getCustomerByPhone(rawPhone);
+  if (!customer) {
+    await sendMessage(operatorPhone, `Customer not found: ${rawPhone}`);
+    return;
+  }
+
+  await setCustomerState(rawPhone, 'idle');
+  await sendMessage(
+    rawPhone,
+    "❌ This window is full\nAll delivery slots for this time frame have been taken.\nNew slots open shortly — stay close 👀"
+  );
+  await sendMessage(operatorPhone, `✅ Rejection sent to ${rawPhone}.`);
+}
+
+/**
+ * BADSS <phone>
+ * Tells the customer their screenshot was unclear and asks them to resend.
+ */
+async function handleBadSS(operatorPhone, args) {
+  let rawPhone = args.trim();
+  if (!rawPhone) {
+    await sendMessage(operatorPhone, 'Usage: BADSS <phone>');
+    return;
+  }
+  if (!rawPhone.startsWith('whatsapp:')) rawPhone = `whatsapp:${rawPhone}`;
+
+  const customer = await getCustomerByPhone(rawPhone);
+  if (!customer) {
+    await sendMessage(operatorPhone, `Customer not found: ${rawPhone}`);
+    return;
+  }
+
+  await setCustomerState(rawPhone, 'idle');
+  await sendMessage(
+    rawPhone,
+    "❌ Need a clearer screenshot\nMake sure it shows:\n • All items ordered\n • Total price\n • Delivery address\nSend it again and we'll take another look 👇"
+  );
+  await sendMessage(operatorPhone, `✅ Bad screenshot message sent to ${rawPhone}.`);
+}
+
+/**
  * CONFIRM <phone> <eta_minutes> <driver_name>
  * Sends the ETA + driver message to the customer after order is accepted.
  */
@@ -248,7 +386,12 @@ async function handleOperatorMessage(from, body) {
   const { command, args } = parseCommand(body);
 
   switch (command) {
-    case 'STATUS':    return handleStatus(from, args);
+    case 'SSCHECKED':    return handleSSChecked(from, args);
+    case 'BADSS':        return handleBadSS(from, args);
+    case 'ACCEPT':       return handleAccept(from, args);
+    case 'REJECT-FAR':   return handleRejectFar(from, args);
+    case 'REJECT-FULL':  return handleRejectFull(from, args);
+    case 'STATUS':       return handleStatus(from, args);
     // Shorthand: OTW <phone> → marks on_the_way and texts customer
     case 'OTW':       return handleStatus(from, `${args} on_the_way`);
     // Shorthand: DONE <phone> → marks delivered and starts feedback
@@ -259,10 +402,11 @@ async function handleOperatorMessage(from, body) {
     case 'INVITE':    return handleInvite(from, args);
     case 'WAITLIST':  return handleWaitlist(from);
     case 'STATS':     return handleStats(from);
+    case 'HELP':
     default:
       await sendMessage(
         from,
-        'Operator commands:\nCONFIRM <phone> <mins> <driver> — send ETA + driver to customer\nOTW <phone> — order on the way\nDONE <phone> — mark delivered\nMSG <phone> <text> — send custom message\nINVITE <phone>\nBROADCAST <msg>\nWAITLIST\nSTATS'
+        'Operator commands:\nSSCHECKED <phone> — approve screenshot\nBADSS <phone> — unclear screenshot, ask to resend\nACCEPT <phone> — confirm order serviceability\nREJECT-FAR <phone> — reject: out of range\nREJECT-FULL <phone> — reject: window full\nCONFIRM <phone> <mins> <driver> — send ETA + driver\nOTW <phone> — order on the way\nDONE <phone> — mark delivered\nMSG <phone> <text> — send custom message\nINVITE <phone>\nBROADCAST <msg>\nWAITLIST\nSTATS'
       );
   }
 }
