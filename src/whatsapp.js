@@ -26,6 +26,22 @@ async function sendMessage(to, body) {
 }
 
 /**
+ * Send a WhatsApp message with an attached image.
+ * mediaUrl must be publicly accessible (or a Twilio-hosted URL from the same account).
+ */
+async function sendMediaMessage(to, body, mediaUrl) {
+  const preview = body.length > 70 ? body.substring(0, 70) + '...' : body;
+  console.log(`[${new Date().toISOString()}] → ${to}: [media] ${preview}`);
+  try {
+    const msg = await client.messages.create({ from: FROM, to, body, mediaUrl: [mediaUrl] });
+    return msg;
+  } catch (err) {
+    console.error(`[whatsapp] sendMediaMessage failed to ${to}:`, err.message);
+    throw err;
+  }
+}
+
+/**
  * Send multiple messages sequentially with a 2-second delay between each.
  */
 async function sendMessages(to, messages) {
@@ -37,4 +53,4 @@ async function sendMessages(to, messages) {
   }
 }
 
-module.exports = { sendMessage, sendMessages, delay };
+module.exports = { sendMessage, sendMediaMessage, sendMessages, delay };
