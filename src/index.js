@@ -113,7 +113,25 @@ async function handleInbound(body) {
     customer = await getCustomerByPhone(from);
   }
 
-  // ── Global commands (work at any state) ───────────────────────────────────
+  // ── JOIN-NIBL gate — must come before global commands ─────────────────────
+  // Unknown/waitlist customers always see the join prompt regardless of what
+  // they typed, UNLESS they typed JOIN-NIBL itself.
+  if (upperBody === 'JOIN-NIBL') {
+    if (customer && customer.status === 'active') {
+      await sendMessage(from, "You're already an active NIBL member! 🎉 Type ORDER to place an order 🛵");
+      return;
+    }
+    await upsertCustomer(from, { status: 'invited' });
+    const invitedCustomer = await getCustomerByPhone(from);
+    return handleInvited(invitedCustomer);
+  }
+
+  if (!customer || (customer.status !== 'active' && customer.status !== 'invited')) {
+    await sendMessage(from, "Welcome to NIBL! 👋\nTo get started, reply with JOIN-NIBL");
+    return;
+  }
+
+  // ── Global commands (active/invited customers only) ───────────────────────
   if (upperBody === 'HELP') {
     await sendMessage(
       from,
@@ -131,7 +149,7 @@ async function handleInbound(body) {
   }
 
   if (upperBody === 'REFERRAL') {
-    if (!customer || customer.status !== 'active') {
+    if (customer.status !== 'active') {
       await sendMessage(from, "You need to be an active member to get a referral link. Send a screenshot to place your first order!");
       return;
     }
@@ -147,8 +165,8 @@ async function handleInbound(body) {
   }
 
   if (upperBody === 'ORDER') {
-    if (!customer || customer.status !== 'active') {
-      await sendMessage(from, "Welcome to NIBL! 👋\nTo get started, reply with JOIN-NIBL");
+    if (customer.status !== 'active') {
+      await sendMessage(from, "You need to be an active member to place an order. Send a screenshot to get started!");
       return;
     }
     const orderState = customer.state || 'idle';
@@ -169,23 +187,6 @@ async function handleInbound(body) {
     } else {
       await sendMessage(from, "You already have an order in progress!\nReply HELP to see your current status 🙌");
     }
-    return;
-  }
-
-  // ── Self-invite via JOIN-NIBL code ───────────────────────────────────────
-  if (upperBody === 'JOIN-NIBL') {
-    if (customer && customer.status === 'active') {
-      await sendMessage(from, "You're already an active NIBL member! 🎉 Send a screenshot to place an order 📸");
-      return;
-    }
-    await upsertCustomer(from, { status: 'invited' });
-    const invitedCustomer = await getCustomerByPhone(from);
-    return handleInvited(invitedCustomer);
-  }
-
-  // ── Unknown / waitlist ────────────────────────────────────────────────────
-  if (!customer || (customer.status !== 'active' && customer.status !== 'invited')) {
-    await sendMessage(from, "Welcome to NIBL! 👋\nTo get started, reply with JOIN-NIBL");
     return;
   }
 
@@ -231,8 +232,12 @@ async function handleInbound(body) {
     case 'awaiting_feedback':
       return handleFeedback(customer, msgBody);
 
+    case 'idle':
+      await sendMessage(from, "Ready to order? Just type ORDER to get started! 🛵");
+      return;
+
     default:
-      // idle or unrecognized — silently ignore
+      // unrecognized state — silently ignore
       break;
   }
 }

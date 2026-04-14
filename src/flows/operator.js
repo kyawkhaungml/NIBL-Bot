@@ -252,7 +252,7 @@ async function handleConfirm(operatorPhone, args) {
   await setCustomerState(rawPhone, 'order_confirmed');
   await sendMessage(
     customer.phone,
-    `🕒 ETA: ${etaMinutes} minutes\n🚗 Driver: ${driverName}\nWe'll update you when we're en route.`
+    `Order Confirmed!\n🕒 ETA: ${etaMinutes} minutes\n🚗 Driver: ${driverName}\nWe'll update you when we're en route.`
   );
   await sendMessage(operatorPhone, `✅ Confirmed for ${rawPhone}.`);
 }
