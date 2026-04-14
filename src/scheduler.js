@@ -1,7 +1,7 @@
 'use strict';
 
 const cron = require('node-cron');
-const { getAllActiveCustomers } = require('./db');
+const { getAllActiveCustomers, getAddressRejectedExpired, setCustomerState } = require('./db');
 const { send7DayNudge, send14DayNudge } = require('./flows/reengagement');
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -43,3 +43,28 @@ cron.schedule('0 18 * * *', async () => {
 });
 
 console.log('[scheduler] Re-engagement cron registered (daily at 18:00)');
+
+/**
+ * Hourly job — resets customers whose address was rejected more than 24h ago
+ * back to awaiting_address so they can try again.
+ */
+cron.schedule('0 * * * *', async () => {
+  console.log(`[scheduler] Running address_rejected reset at ${new Date().toISOString()}`);
+
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const customers = await getAddressRejectedExpired(cutoff);
+
+  let reset = 0;
+  for (const c of customers) {
+    try {
+      await setCustomerState(c.phone, 'awaiting_address');
+      reset++;
+    } catch (err) {
+      console.error(`[scheduler] failed to reset ${c.phone}:`, err.message);
+    }
+  }
+
+  console.log(`[scheduler] address_rejected reset done — reset ${reset} customer(s)`);
+});
+
+console.log('[scheduler] address_rejected reset cron registered (hourly)');

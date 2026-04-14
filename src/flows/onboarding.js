@@ -48,11 +48,11 @@ After that, we'll include drinks only when they match your order
 Once you send your order, we'll confirm + send an ETA.
 ⚠️ Limited slots per time window`,
     
-    'Send your order whenever you\'re ready 👇',
+    "First, what's your delivery address? 📍\nWe'll make sure we cover your area before you place an order.",
   ]);
 
   await upsertCustomer(phone, { status: 'active' });
-  await setCustomerState(phone, 'idle');
+  await setCustomerState(phone, 'awaiting_address');
 }
 
 module.exports = { handleUnknown, handleInvited };

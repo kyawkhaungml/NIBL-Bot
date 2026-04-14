@@ -8,7 +8,7 @@ const twilio = require('twilio');
 const { getCustomerByPhone, upsertCustomer, ensureReferralCode } = require('./db');
 const { sendMessage } = require('./whatsapp');
 const { handleUnknown, handleInvited } = require('./flows/onboarding');
-const { handleImage, handlePlatformReply, handleAddressReply, handleCustomerStatusQuery } = require('./flows/order');
+const { handleImage, handleAddressSubmission, handleCustomerStatusQuery } = require('./flows/order');
 const { handleFeedback } = require('./flows/feedback');
 const { handleOperatorMessage } = require('./flows/operator');
 const { isAdmin, ADMINS } = require('./admins');
@@ -16,8 +16,7 @@ const { getClaimant } = require('./claims');
 const { handleDealReply } = require('./flows/reengagement');
 
 // Start scheduler (registers cron jobs)
-// TODO: re-enable when re-engagement messages are ready
-// require('./scheduler');
+require('./scheduler');
 
 const app = express();
 
@@ -157,17 +156,36 @@ async function handleInbound(body) {
   }
 
   switch (state) {
-    case 'awaiting_platform':
-      return handlePlatformReply(customer, msgBody);
-
     case 'awaiting_address':
-      return handleAddressReply(customer, msgBody);
+      return handleAddressSubmission(customer, msgBody);
+
+    case 'awaiting_address_verification':
+      await sendMessage(from, "We're still checking your address — we'll get back to you shortly! 🙏");
+      return;
+
+    case 'awaiting_screenshot':
+      // Text received but no image
+      await sendMessage(from, "We're ready for your screenshot! Just send it over 📸");
+      return;
+
+    case 'awaiting_screenshot_verification':
+    case 'awaiting_confirmation':
+      await sendMessage(from, "Your screenshot is under review — almost there! 👀");
+      return;
+
+    case 'order_confirmed':
+    case 'order_on_the_way':
+      return; // silently ignore during active delivery
+
+    case 'address_rejected':
+      await sendMessage(from, "We'll let you know when we expand to your area! Stay tuned 👀");
+      return;
 
     case 'awaiting_feedback':
       return handleFeedback(customer, msgBody);
 
     default:
-      // Idle active customer — silently ignore unrecognised text/extra screenshots
+      // idle or unrecognized — silently ignore
       break;
   }
 }

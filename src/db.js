@@ -99,6 +99,20 @@ async function createOrder(customerId, screenshotUrl) {
   }
 }
 
+async function getOrderCount(customerId) {
+  try {
+    const { count, error } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('customer_id', customerId);
+    if (error) throw error;
+    return count || 0;
+  } catch (err) {
+    console.error('[db] getOrderCount:', err.message);
+    return 0;
+  }
+}
+
 async function getLatestOrder(customerId) {
   try {
     const { data, error } = await supabase
@@ -234,6 +248,23 @@ async function getStats() {
   }
 }
 
+// ─── Scheduler helpers ───────────────────────────────────────────────────────
+
+async function getAddressRejectedExpired(cutoffIso) {
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('phone')
+      .eq('state', 'address_rejected')
+      .lt('last_active_at', cutoffIso);
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[db] getAddressRejectedExpired:', err.message);
+    return [];
+  }
+}
+
 // ─── Referral helpers ────────────────────────────────────────────────────────
 
 function generateReferralCode() {
@@ -288,6 +319,7 @@ module.exports = {
   getAllActiveCustomers,
   getWaitlistCustomers,
   createOrder,
+  getOrderCount,
   getLatestOrder,
   updateOrderStatus,
   updateOrderPlatform,
@@ -296,5 +328,6 @@ module.exports = {
   logDrinkInteraction,
   logBroadcast,
   getStats,
+  getAddressRejectedExpired,
   ensureReferralCode,
 };

@@ -18,45 +18,49 @@ const RATING_RESPONSES = {
 
 /**
  * Called by operator flow when an order is marked as delivered.
- * Sends the combined delivery + drink rating prompt.
+ * Sends thank you immediately, then schedules the drink rating prompt for 30 min later.
  */
 async function startFeedback(phone) {
   await sendMessage(
     phone,
-    "🙌 Thanks for using NIBL\nAppreciate the order — hope you enjoyed it.\nTakes 2 seconds 👇\n⭐ Delivery: 1 2 3 4 5\n🥤 Drink: 1 2 3 4 5"
+    "🙌 Thanks for using NIBL!\nHope you enjoyed the order — see you next time 👋"
   );
-  await setCustomerState(phone, 'awaiting_feedback');
+  await setCustomerState(phone, 'idle');
+
+  setTimeout(async () => {
+    try {
+      await sendMessage(
+        phone,
+        "🥤 How was the drink we included with your order?\nRate it 1–5:"
+      );
+      await setCustomerState(phone, 'awaiting_feedback');
+    } catch (err) {
+      console.error('[feedback] delayed drink prompt failed for', phone, ':', err.message);
+    }
+  }, 30 * 60 * 1000); // 30 minutes
 }
 
 /**
- * Customer replies with two space-separated ratings, e.g. "5 4".
+ * Customer replies with a single drink rating, e.g. "4".
  * state: awaiting_feedback
  */
 async function handleFeedback(customer, body) {
   const phone = customer.phone;
-  const parts = body.trim().split(/[\s,/]+/);
-  const deliveryRating = parseInt(parts[0], 10);
-  const drinkRating    = parseInt(parts[1], 10);
+  const drinkRating = parseInt(body.trim(), 10);
 
-  if (
-    isNaN(deliveryRating) || deliveryRating < 1 || deliveryRating > 5 ||
-    isNaN(drinkRating)    || drinkRating < 1    || drinkRating > 5
-  ) {
-    await sendMessage(phone, "Please reply with two numbers e.g. 5 4\n⭐ Delivery first, 🥤 Drink second");
+  if (isNaN(drinkRating) || drinkRating < 1 || drinkRating > 5) {
+    await sendMessage(phone, "Please reply with a number 1–5 🥤");
     return;
   }
 
   const order = await getLatestOrder(customer.id);
   if (order) {
-    await createFeedback(order.id, customer.id, deliveryRating, drinkRating);
+    await createFeedback(order.id, customer.id, drinkRating, drinkRating);
     await logDrinkInteraction(order.id, customer.id);
   }
 
-  const deliveryMsg = RATING_RESPONSES[deliveryRating] || "Thanks!";
-  const drinkMsg    = RATING_RESPONSES[drinkRating]    || "Thanks!";
-  await sendMessage(phone, `⭐ Delivery: ${deliveryMsg}\n🥤 Drink: ${drinkMsg}`);
-
-  await sendMessage(phone, "Thanks for the feedback! See you next time 👋");
+  const drinkMsg = RATING_RESPONSES[drinkRating] || "Thanks!";
+  await sendMessage(phone, `🥤 Drink: ${drinkMsg}\nThanks for the feedback! See you next time 👋`);
   await setCustomerState(phone, 'idle');
 }
 

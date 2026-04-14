@@ -3,39 +3,35 @@
 const {
   createOrder,
   getLatestOrder,
-  updateOrderPlatform,
+  updateOrderStatus,
   updateOrderAddress,
+  upsertCustomer,
   setCustomerState,
 } = require('../db');
 const { sendMessage } = require('../whatsapp');
 const { ADMINS } = require('../admins');
 const { getClaimant } = require('../claims');
 
-const PLATFORM_MAP = {
-  '1': 'doordash',
-  '2': 'ubereats',
-  '3': 'other',
-};
-
-const PLATFORM_LABELS = {
-  doordash: 'DoorDash',
-  ubereats: 'UberEats',
-  other: 'Other',
-};
-
 const STATUS_MESSAGES = {
-  received:   '📥 We got your order and are reviewing it!',
-  picking_up: '🏃 We\'re picking it up now.',
-  on_the_way: '🛵 On the way to you!',
-  delivered:  '✅ Delivered!',
+  screenshot_received:     '📥 We received your screenshot and are reviewing it!',
+  screenshot_verified:     '✅ Screenshot verified — confirming your order now.',
+  screenshot_rejected:     '❌ Screenshot unclear — we asked you to resend.',
+  confirmed:               '🙌 Order confirmed — on our way to pick it up!',
+  on_the_way:              '🛵 On the way to you!',
+  delivered:               '✅ Delivered!',
 };
 
 /**
  * Customer sends an image (order screenshot).
- * Sets state to awaiting_ss_check — admin must send SSCHECKED <phone> to proceed.
+ * Only accepted when state is awaiting_screenshot.
  */
 async function handleImage(customer, mediaUrl) {
   const phone = customer.phone;
+
+  if (customer.state !== 'awaiting_screenshot') {
+    await sendMessage(phone, "We're not ready for your screenshot yet — we'll let you know when to send it! 😊");
+    return;
+  }
 
   const order = await createOrder(customer.id, mediaUrl);
   if (!order) {
@@ -43,84 +39,45 @@ async function handleImage(customer, mediaUrl) {
     return;
   }
 
-  await setCustomerState(phone, 'awaiting_ss_check');
-  await sendMessage(phone, "📸 Got it! We're reviewing your order now — we'll message you shortly.");
+  await updateOrderStatus(order.id, 'screenshot_received');
+  await updateOrderAddress(order.id, customer.address || '');
+  await setCustomerState(phone, 'awaiting_screenshot_verification');
+  await sendMessage(phone, "Got your order screenshot! 👀\nGive us a moment to review it.");
 
   const shortPhone = phone.replace('whatsapp:', '');
   const caption =
-    `📸 NEW SCREENSHOT\n` +
+    `📸 SCREENSHOT RECEIVED\n` +
     `Customer: ${shortPhone}\n` +
+    `Address: ${customer.address || 'N/A'}\n` +
     `Screenshot: ${order.screenshot_url}\n\n` +
     `SSCHECKED ${shortPhone}\n` +
     `BADSS ${shortPhone}`;
-  await Promise.all(ADMINS.map(admin => sendMessage(admin, caption)));
-}
-
-/**
- * Customer replies with 1/2/3 to indicate platform.
- * state: awaiting_platform
- */
-async function handlePlatformReply(customer, body) {
-  const phone = customer.phone;
-  const key = body.trim();
-  const platform = PLATFORM_MAP[key];
-
-  if (!platform) {
-    await sendMessage(phone, "Please reply with 1 for DoorDash, 2 for UberEats, or 3 for Other.");
-    return;
-  }
-
-  const order = await getLatestOrder(customer.id);
-  if (!order) {
-    await sendMessage(phone, "Something went wrong — couldn't find your order. Please send the screenshot again.");
-    await setCustomerState(phone, 'idle');
-    return;
-  }
-
-  await updateOrderPlatform(order.id, platform);
-  await setCustomerState(phone, 'awaiting_address');
-  await sendMessage(phone, 'Perfect! What\'s the delivery address? 📍');
-}
-
-/**
- * Customer replies with delivery address.
- * state: awaiting_address
- */
-async function handleAddressReply(customer, body) {
-  const phone = customer.phone;
-  const address = body.trim();
-
-  const order = await getLatestOrder(customer.id);
-  if (!order) {
-    await sendMessage(phone, "Something went wrong — couldn't find your order. Please send the screenshot again.");
-    await setCustomerState(phone, 'idle');
-    return;
-  }
-
-  await updateOrderAddress(order.id, address);
-  await setCustomerState(phone, 'awaiting_acceptance');
-  await sendMessage(phone, "Got your address! 📍 Checking serviceability — we'll confirm shortly.");
-
-  // Notify only the claiming admin (whoever did SSCHECKED), or all admins if unclaimed
-  const platformLabel = PLATFORM_LABELS[order.platform] || 'Unknown';
-  const shortPhone = phone.replace('whatsapp:', '');
-  const adminMsg =
-    `📍 ADDRESS RECEIVED\n` +
-    `Customer: ${shortPhone}\n` +
-    `Platform: ${platformLabel}\n` +
-    `Address: ${address}\n` +
-    `Screenshot: ${order.screenshot_url}\n\n` +
-    `BADAD ${shortPhone}\n` +
-    `ACCEPT ${shortPhone}\n` +
-    `REJECT-FAR ${shortPhone}\n` +
-    `REJECT-FULL ${shortPhone}\n` +
-    `CONFIRM ${shortPhone} <mins> <driver>\n` +
-    `OTW ${shortPhone}\n` +
-    `DONE ${shortPhone}`;
 
   const claimant = getClaimant(phone);
   const recipients = claimant ? [claimant] : ADMINS;
-  await Promise.all(recipients.map(admin => sendMessage(admin, adminMsg)));
+  await Promise.all(recipients.map(admin => sendMessage(admin, caption)));
+}
+
+/**
+ * Customer replies with their delivery address.
+ * state: awaiting_address
+ */
+async function handleAddressSubmission(customer, body) {
+  const phone = customer.phone;
+  const address = body.trim();
+
+  await upsertCustomer(phone, { address });
+  await setCustomerState(phone, 'awaiting_address_verification');
+  await sendMessage(phone, "Got it! 📍 We're checking if we deliver to your area — sit tight, we'll confirm shortly.");
+
+  const shortPhone = phone.replace('whatsapp:', '');
+  const adminMsg =
+    `📍 ADDRESS CHECK\n` +
+    `Customer: ${shortPhone}\n` +
+    `Address: ${address}\n\n` +
+    `CHECKAD ${shortPhone}\n` +
+    `BADAD ${shortPhone}`;
+  await Promise.all(ADMINS.map(admin => sendMessage(admin, adminMsg)));
 }
 
 /**
@@ -146,7 +103,6 @@ async function handleCustomerStatusQuery(customer) {
 
 module.exports = {
   handleImage,
-  handlePlatformReply,
-  handleAddressReply,
+  handleAddressSubmission,
   handleCustomerStatusQuery,
 };
