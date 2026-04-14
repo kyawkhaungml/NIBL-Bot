@@ -107,7 +107,18 @@ All commands are sent **from your operator WhatsApp number** to the bot number.
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `STATUS <phone> <status>` | Update order status for a customer's latest order | `STATUS +12125551234 on_the_way` |
+| `CHECKAD <phone>` | Approve delivery address — unlocks screenshot submission | `CHECKAD +12125551234` |
+| `VALIDAD <phone>` | Ask customer to resend a valid/complete address | `VALIDAD +12125551234` |
+| `BADAD <phone>` | Reject area — 24h lockout, then auto-reset to awaiting_address | `BADAD +12125551234` |
+| `SSCHECKED <phone>` | Approve screenshot — notify customer, move to confirmation | `SSCHECKED +12125551234` |
+| `BADSS <phone>` | Unclear screenshot — ask customer to resend | `BADSS +12125551234` |
+| `CONFIRM <phone> <mins> <driver>` | Send ETA + driver name to customer | `CONFIRM +12125551234 25 John` |
+| `OTW <phone>` | Mark order on the way, notify customer | `OTW +12125551234` |
+| `DONE <phone>` | Mark delivered + send feedback prompt | `DONE +12125551234` |
+| `REJECT-FAR <phone>` | Reject order — drop-off out of range | `REJECT-FAR +12125551234` |
+| `REJECT-FULL <phone>` | Reject order — delivery window full | `REJECT-FULL +12125551234` |
+| `STATUS <phone> <status>` | Manual order status override | `STATUS +12125551234 on_the_way` |
+| `MSG <phone> <text>` | Send a custom message to a customer | `MSG +12125551234 Running 10 min late!` |
 | `BROADCAST <message>` | Send a message to all active customers | `BROADCAST New drinks this week! 🥤` |
 | `INVITE <phone>` | Invite a number — sends welcome sequence | `INVITE +12125551234` |
 | `WAITLIST` | List all waitlisted customers | `WAITLIST` |
@@ -131,6 +142,7 @@ Customers can text these at any time:
 | Command | Action |
 |---------|--------|
 | *(send an image)* | Start a new order |
+| `ORDER` | Start a repeat order |
 | `HELP` | Show help menu |
 | `STATUS` | Check latest order status |
 | `DEAL` | See current promotion (set via `CURRENT_DEAL` env var) |

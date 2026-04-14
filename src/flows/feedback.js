@@ -34,6 +34,7 @@ async function startFeedback(phone) {
         "🥤 How was the drink we included with your order?\nRate it 1–5:"
       );
       await setCustomerState(phone, 'awaiting_feedback');
+      await sendMessage(phone, "Want to order again? Reply ORDER anytime 🛵");
     } catch (err) {
       console.error('[feedback] delayed drink prompt failed for', phone, ':', err.message);
     }

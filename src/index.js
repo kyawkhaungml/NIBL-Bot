@@ -5,9 +5,9 @@ require('dotenv').config();
 const express = require('express');
 const twilio = require('twilio');
 
-const { getCustomerByPhone, upsertCustomer, ensureReferralCode } = require('./db');
+const { getCustomerByPhone, upsertCustomer, ensureReferralCode, setCustomerState } = require('./db');
 const { sendMessage } = require('./whatsapp');
-const { handleUnknown, handleInvited } = require('./flows/onboarding');
+const { handleInvited } = require('./flows/onboarding');
 const { handleImage, handleAddressSubmission, handleCustomerStatusQuery } = require('./flows/order');
 const { handleFeedback } = require('./flows/feedback');
 const { handleOperatorMessage } = require('./flows/operator');
@@ -60,9 +60,15 @@ function validateTwilioSignature(req, res, next) {
 async function handleInbound(body) {
   const from = body.From || '';
   const msgBody = (body.Body || '').trim();
-  const mediaUrl = body.MediaUrl0 || null;
   const numMedia = parseInt(body.NumMedia || '0', 10);
   const upperBody = msgBody.toUpperCase();
+
+  // Collect every media URL Twilio attached (MediaUrl0, MediaUrl1, …)
+  const mediaUrls = [];
+  for (let i = 0; i < numMedia; i++) {
+    const u = body[`MediaUrl${i}`];
+    if (u) mediaUrls.push(u);
+  }
 
   console.log(`[webhook] ← ${from}: "${msgBody}" (media: ${numMedia})`);
 
@@ -77,11 +83,25 @@ async function handleInbound(body) {
   const shortFrom = from.replace('whatsapp:', '');
   const claimant = getClaimant(from);
   const forwardTo = claimant ? [claimant] : ADMINS;
-  if (numMedia === 0) {
-    forwardTo.forEach(admin => sendMessage(admin, `💬 ${shortFrom}:\n${msgBody}`).catch(() => {}));
+
+  let forwardMsg;
+  if (mediaUrls.length > 0) {
+    const imgLines = mediaUrls.map((u, i) =>
+      mediaUrls.length === 1 ? `📸 Screenshot: ${u}` : `📸 Screenshot ${i + 1}: ${u}`
+    ).join('\n');
+    forwardMsg = `📨 [CUSTOMER: ${shortFrom}]\n${imgLines}`;
+  } else if (numMedia > 0) {
+    const mediaType = body.MediaContentType0 || 'media';
+    forwardMsg = `📨 [CUSTOMER: ${shortFrom}]\n${mediaType} received`;
+  } else {
+    forwardMsg = `📨 [CUSTOMER: ${shortFrom}]\n${msgBody}`;
   }
-  // Screenshots are not forwarded here — handleImage sends the full notification with commands.
-  // (fire-and-forget — don't let forwarding failure block the main flow)
+  // fire-and-forget — forwarding failure must never block the customer flow
+  forwardTo.forEach(admin =>
+    sendMessage(admin, forwardMsg).catch(err => {
+      console.error('[webhook] forward failed:', err.message);
+    })
+  );
 
   // ── Load customer ──────────────────────────────────────────────────────────
   let customer = await getCustomerByPhone(from);
@@ -97,7 +117,7 @@ async function handleInbound(body) {
   if (upperBody === 'HELP') {
     await sendMessage(
       from,
-      "Here's what you can do:\n📸 Send a screenshot — place a new order\nDEAL — see current promotions\nSTATUS — check your last order\nREFERRAL — get your referral link\n\nReply anytime and we'll get back to you!"
+      "Here's what you can do:\n📸 Send a screenshot — place a new order\nORDER — start a repeat order\nDEAL — see current promotions\nSTATUS — check your last order\nREFERRAL — get your referral link\n\nReply anytime and we'll get back to you!"
     );
     return;
   }
@@ -126,6 +146,32 @@ async function handleInbound(body) {
     return;
   }
 
+  if (upperBody === 'ORDER') {
+    if (!customer || customer.status !== 'active') {
+      await sendMessage(from, "Welcome to NIBL! 👋\nTo get started, reply with JOIN-NIBL");
+      return;
+    }
+    const orderState = customer.state || 'idle';
+    const repeatableStates = ['idle', 'awaiting_feedback', 'address_rejected'];
+    if (repeatableStates.includes(orderState)) {
+      await sendMessage(
+        from,
+        "Let's run another order! 🎉\nWhat's your delivery address? 📍\n(If it's the same as last time, just type it again)"
+      );
+      await setCustomerState(from, 'awaiting_address');
+      const lastAddress = customer.address || 'N/A';
+      ADMINS.forEach(admin =>
+        sendMessage(
+          admin,
+          `🔄 REPEAT ORDER\nCustomer: ${shortFrom}\nLast address: ${lastAddress}\nNow asking for new address`
+        ).catch(err => console.error('[webhook] repeat order forward failed:', err.message))
+      );
+    } else {
+      await sendMessage(from, "You already have an order in progress!\nReply HELP to see your current status 🙌");
+    }
+    return;
+  }
+
   // ── Self-invite via JOIN-NIBL code ───────────────────────────────────────
   if (upperBody === 'JOIN-NIBL') {
     if (customer && customer.status === 'active') {
@@ -138,8 +184,9 @@ async function handleInbound(body) {
   }
 
   // ── Unknown / waitlist ────────────────────────────────────────────────────
-  if (!customer || customer.status === 'waitlist') {
-    return handleUnknown(from, msgBody, customer);
+  if (!customer || (customer.status !== 'active' && customer.status !== 'invited')) {
+    await sendMessage(from, "Welcome to NIBL! 👋\nTo get started, reply with JOIN-NIBL");
+    return;
   }
 
   // ── Invited — send welcome sequence ───────────────────────────────────────
@@ -151,8 +198,8 @@ async function handleInbound(body) {
   const state = customer.state || 'idle';
 
   // Image takes priority over text state
-  if (numMedia > 0 && mediaUrl) {
-    return handleImage(customer, mediaUrl);
+  if (mediaUrls.length > 0) {
+    return handleImage(customer, mediaUrls);
   }
 
   switch (state) {

@@ -110,6 +110,37 @@ async function handleBadAD(operatorPhone, args) {
 }
 
 /**
+ * VALIDAD <phone>
+ * Admin asks customer to resend a valid/complete delivery address.
+ * State is reset to awaiting_address so the customer can reply with a new one.
+ */
+async function handleValidAD(operatorPhone, args) {
+  let rawPhone = args.trim();
+  if (!rawPhone) {
+    await sendMessage(operatorPhone, 'Usage: VALIDAD <phone>');
+    return;
+  }
+  if (!rawPhone.startsWith('whatsapp:')) rawPhone = `whatsapp:${rawPhone}`;
+
+  const customer = await getCustomerByPhone(rawPhone);
+  if (!customer) {
+    await sendMessage(operatorPhone, `❌ Customer not found: ${rawPhone}`);
+    return;
+  }
+
+  if (customer.state !== 'awaiting_address_verification') {
+    await sendStateWarning(operatorPhone, rawPhone, customer.state);
+  }
+
+  await setCustomerState(rawPhone, 'awaiting_address');
+  await sendMessage(
+    rawPhone,
+    "We couldn't verify that address 🤔\nCould you double-check and send it again?\nMake sure to include your street, apartment number, and zip code 📍"
+  );
+  await sendMessage(operatorPhone, `✅ Address validation request sent to ${rawPhone}.`);
+}
+
+/**
  * SSCHECKED <phone>
  * Admin approves screenshot — customer is notified and state moves to awaiting_confirmation.
  */
@@ -521,6 +552,7 @@ async function handleOperatorMessage(from, body) {
 
   switch (command) {
     case 'CHECKAD':     return handleCheckAD(from, args);
+    case 'VALIDAD':     return handleValidAD(from, args);
     case 'BADAD':       return handleBadAD(from, args);
     case 'SSCHECKED':   return handleSSChecked(from, args);
     case 'BADSS':       return handleBadSS(from, args);
@@ -541,6 +573,7 @@ async function handleOperatorMessage(from, body) {
         from,
         'Operator commands:\n' +
         'CHECKAD <phone> — approve address, unlock screenshot\n' +
+        'VALIDAD <phone> — ask customer to resend valid address\n' +
         'BADAD <phone> — reject area (24h lockout)\n' +
         'SSCHECKED <phone> — approve screenshot\n' +
         'BADSS <phone> — unclear screenshot, ask to resend\n' +

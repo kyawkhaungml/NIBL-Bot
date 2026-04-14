@@ -22,10 +22,11 @@ const STATUS_MESSAGES = {
 };
 
 /**
- * Customer sends an image (order screenshot).
+ * Customer sends one or more images (order screenshots).
  * Only accepted when state is awaiting_screenshot.
+ * mediaUrls is an array; the first URL is stored on the order record.
  */
-async function handleImage(customer, mediaUrl) {
+async function handleImage(customer, mediaUrls) {
   const phone = customer.phone;
 
   if (customer.state !== 'awaiting_screenshot') {
@@ -33,7 +34,8 @@ async function handleImage(customer, mediaUrl) {
     return;
   }
 
-  const order = await createOrder(customer.id, mediaUrl);
+  const primaryUrl = mediaUrls[0];
+  const order = await createOrder(customer.id, primaryUrl);
   if (!order) {
     await sendMessage(phone, "Sorry, something went wrong saving your order. Please try again!");
     return;
@@ -45,11 +47,15 @@ async function handleImage(customer, mediaUrl) {
   await sendMessage(phone, "Got your order screenshot! 👀\nGive us a moment to review it.");
 
   const shortPhone = phone.replace('whatsapp:', '');
+  const screenshotLines = mediaUrls.length === 1
+    ? `Screenshot: ${primaryUrl}`
+    : mediaUrls.map((u, i) => `Screenshot ${i + 1}: ${u}`).join('\n');
+
   const caption =
     `📸 SCREENSHOT RECEIVED\n` +
     `Customer: ${shortPhone}\n` +
     `Address: ${customer.address || 'N/A'}\n` +
-    `Screenshot: ${order.screenshot_url}\n\n` +
+    `${screenshotLines}\n\n` +
     `SSCHECKED ${shortPhone}\n` +
     `BADSS ${shortPhone}`;
 
@@ -98,7 +104,8 @@ async function handleCustomerStatusQuery(customer) {
   }
 
   const statusText = STATUS_MESSAGES[order.status] || '❓ Unknown status';
-  await sendMessage(phone, `Your last order status:\n${statusText}`);
+  const repeatPrompt = order.status === 'delivered' ? '\n\nWant to order again? Reply ORDER 🛵' : '';
+  await sendMessage(phone, `Your last order status:\n${statusText}${repeatPrompt}`);
 }
 
 module.exports = {
