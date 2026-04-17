@@ -10,7 +10,6 @@ const {
 } = require('../db');
 const { sendMessage } = require('../whatsapp');
 const { ADMINS } = require('../admins');
-const { getClaimant } = require('../claims');
 
 const STATUS_MESSAGES = {
   screenshot_received:     '📥 We received your screenshot and are reviewing it!',
@@ -59,8 +58,7 @@ async function handleImage(customer, mediaUrls) {
     `SSCHECKED ${shortPhone}\n` +
     `BADSS ${shortPhone}`;
 
-  const claimant = getClaimant(phone);
-  const recipients = claimant ? [claimant] : ADMINS;
+  const recipients = ADMINS;
   await Promise.all(recipients.map(admin => sendMessage(admin, caption)));
 }
 
