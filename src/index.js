@@ -77,36 +77,20 @@ async function handleInbound(body) {
     return handleOperatorMessage(from, msgBody);
   }
 
-  // ── Load customer early (needed for state-aware forwarding) ─────────────────
-  let customer = await getCustomerByPhone(from);
-
-  if (customer) {
-    await upsertCustomer(from, { last_active_at: new Date().toISOString() });
-    customer = await getCustomerByPhone(from);
-  }
-
   // ── Forward every customer message to operator(s) ─────────────────────────
+  // Fires immediately before any DB work — forwarding must never be blocked.
   // If one admin has claimed this customer, only they receive the forward.
   // Otherwise broadcast to all admins (unclaimed conversation).
   const shortFrom = from.replace('whatsapp:', '');
   const claimant = getClaimant(from);
   const forwardTo = claimant ? [claimant] : ADMINS;
-  const customerState = customer ? (customer.state || 'idle') : null;
 
   let forwardMsg;
   if (mediaUrls.length > 0) {
-    const urlLines = mediaUrls.length === 1
-      ? `📸 Image received: ${mediaUrls[0]}`
-      : mediaUrls.map((u, i) => `📸 Image received ${i + 1}: ${u}`).join('\n');
-
-    if (customerState === 'awaiting_feedback' || customerState === 'completed') {
-      forwardMsg = `📨 [CUSTOMER: ${shortFrom}]\n${urlLines}\n⚠️ State: ${customerState} — not processed as order screenshot`;
-    } else {
-      const imgLines = mediaUrls.length === 1
-        ? `📸 Screenshot: ${mediaUrls[0]}`
-        : mediaUrls.map((u, i) => `📸 Screenshot ${i + 1}: ${u}`).join('\n');
-      forwardMsg = `📨 [CUSTOMER: ${shortFrom}]\n${imgLines}`;
-    }
+    const imgLines = mediaUrls.length === 1
+      ? `📸 Screenshot: ${mediaUrls[0]}`
+      : mediaUrls.map((u, i) => `📸 Screenshot ${i + 1}: ${u}`).join('\n');
+    forwardMsg = `📨 [CUSTOMER: ${shortFrom}]\n${imgLines}`;
   } else if (numMedia > 0) {
     const mediaType = body.MediaContentType0 || 'media';
     forwardMsg = `📨 [CUSTOMER: ${shortFrom}]\n${mediaType} received`;
@@ -119,6 +103,15 @@ async function handleInbound(body) {
       console.error('[webhook] forward failed:', err.message);
     })
   );
+
+  // ── Load customer ──────────────────────────────────────────────────────────
+  let customer = await getCustomerByPhone(from);
+
+  // Touch last_active_at for existing customers
+  if (customer) {
+    await upsertCustomer(from, { last_active_at: new Date().toISOString() });
+    customer = await getCustomerByPhone(from);
+  }
 
   // ── JOIN-NIBL gate — must come before global commands ─────────────────────
   // Unknown/waitlist customers always see the join prompt regardless of what
@@ -207,12 +200,20 @@ async function handleInbound(body) {
 
   // Route images based on state — only awaiting_screenshot is valid for order screenshots
   if (mediaUrls.length > 0) {
-    if (state === 'awaiting_feedback') {
-      await sendMessage(from, "Before we start your next order, how would you rate the drink we included? Reply with ⭐ 1-5 🥤");
-      return;
-    }
-    if (state === 'completed') {
-      await sendMessage(from, "Looks like you want to place another order! 🛵\nType ORDER to get started and we'll walk you through it.");
+    if (state === 'awaiting_feedback' || state === 'completed') {
+      const urlLines = mediaUrls.length === 1
+        ? `📸 Image received: ${mediaUrls[0]}`
+        : mediaUrls.map((u, i) => `📸 Image received ${i + 1}: ${u}`).join('\n');
+      const recipients = claimant ? [claimant] : ADMINS;
+      recipients.forEach(admin =>
+        sendMessage(admin, `📨 [CUSTOMER: ${shortFrom}]\n${urlLines}\n⚠️ State: ${state} — not processed as order screenshot`)
+          .catch(err => console.error('[webhook] state-image note failed:', err.message))
+      );
+      if (state === 'awaiting_feedback') {
+        await sendMessage(from, "Before we start your next order, how would you rate the drink we included? Reply with ⭐ 1-5 🥤");
+      } else {
+        await sendMessage(from, "Looks like you want to place another order! 🛵\nType ORDER to get started and we'll walk you through it.");
+      }
       return;
     }
     return handleImage(customer, mediaUrls);
