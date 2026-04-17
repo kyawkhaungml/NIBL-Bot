@@ -39,7 +39,7 @@ async function handleInvited(customer) {
     'Welcome to NIBL 🎉 You\'re in!',
 
     `Here's how it works:
-1.Order on DoorDash or Uber Eats
+1.Order on DoorDash or Uber Eats (Pickup Only, Not Delivery!)
 2.Screenshot the full order (items + total + address)
 3.Send it here
 We'll pick it up and deliver it to you for free

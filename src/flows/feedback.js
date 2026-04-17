@@ -50,7 +50,7 @@ async function handleFeedback(customer, body) {
   const drinkRating = parseInt(body.trim(), 10);
 
   if (isNaN(drinkRating) || drinkRating < 1 || drinkRating > 5) {
-    await sendMessage(phone, "Please reply with a number 1–5 🥤");
+    await sendMessage(phone, "Could you please rate the drink from your previous order before you start the new order?\nPlease reply with a number 1–5 🥤");
     return;
   }
 

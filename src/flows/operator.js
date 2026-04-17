@@ -175,7 +175,7 @@ async function handleSSChecked(operatorPhone, args) {
     rawPhone,
     'Order looks good! ✅\nConfirming your order now — one moment 🙌'
   );
-  await sendMessage(operatorPhone, `✅ Screenshot approved. Customer notified.`);
+  await sendMessage(operatorPhone, `✅ Screenshot approved. Customer notified.\nCONFIRM <phone> <eta_minutes> <driver_name>.`);
 }
 
 /**

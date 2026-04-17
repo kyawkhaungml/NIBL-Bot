@@ -10,7 +10,7 @@ async function send7DayNudge(customer) {
   try {
     await sendMessage(
       customer.phone,
-      `Hey ${name}! 👋 It's been a week — ready for another free delivery? We've got something new in the bag this week 👀 Just send your screenshot!`
+      `Hey ${name}! 👋 It's been a week — ready for another free delivery? We've got something new in the bag this week 👀 Just type ORDER!`
     );
   } catch (err) {
     console.error(`[reengagement] 7-day nudge failed for ${customer.phone}:`, err.message);
