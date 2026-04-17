@@ -170,7 +170,7 @@ async function handleInbound(body) {
       return;
     }
     const orderState = customer.state || 'idle';
-    const repeatableStates = ['idle', 'awaiting_feedback', 'address_rejected'];
+    const repeatableStates = ['idle', 'awaiting_feedback', 'address_rejected', 'completed'];
     if (repeatableStates.includes(orderState)) {
       await sendMessage(
         from,
@@ -198,8 +198,28 @@ async function handleInbound(body) {
   // ── Active customer — state machine ──────────────────────────────────────
   const state = customer.state || 'idle';
 
-  // Image takes priority over text state
+  // Route images based on state — only awaiting_screenshot is valid for order screenshots
   if (mediaUrls.length > 0) {
+    if (state === 'awaiting_feedback') {
+      const claimant = getClaimant(from);
+      const recipients = claimant ? [claimant] : ADMINS;
+      recipients.forEach(admin =>
+        sendMessage(admin, `📨 [CUSTOMER: ${shortFrom}]\n📸 Image received (customer is in awaiting_feedback state — not processed as order screenshot)`)
+          .catch(err => console.error('[webhook] state-image forward failed:', err.message))
+      );
+      await sendMessage(from, "Before we start your next order, how would you rate the drink we included? Reply with ⭐ 1-5 🥤");
+      return;
+    }
+    if (state === 'completed') {
+      const claimant = getClaimant(from);
+      const recipients = claimant ? [claimant] : ADMINS;
+      recipients.forEach(admin =>
+        sendMessage(admin, `📨 [CUSTOMER: ${shortFrom}]\n📸 Image received (customer is in completed state — prompted to type ORDER first)`)
+          .catch(err => console.error('[webhook] state-image forward failed:', err.message))
+      );
+      await sendMessage(from, "Looks like you want to place another order! 🛵\nType ORDER to get started and we'll walk you through it.");
+      return;
+    }
     return handleImage(customer, mediaUrls);
   }
 
@@ -233,6 +253,7 @@ async function handleInbound(body) {
       return handleFeedback(customer, msgBody);
 
     case 'idle':
+    case 'completed':
       await sendMessage(from, "Ready to order? Just type ORDER to get started! 🛵");
       return;
 

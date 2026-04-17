@@ -12,8 +12,8 @@ const RATING_RESPONSES = {
   5: "So glad you loved it! 🙌",
   4: "Awesome, glad it went well!",
   3: "Thanks for the feedback, we'll keep improving!",
-  2: "Sorry to hear that 😔 We want to make it right.",
-  1: "Sorry to hear that 😔 We want to make it right.",
+  2: "Sorry to hear that 😔 We want to make it right. We'll keep improving!",
+  1: "Sorry to hear that 😔 We want to make it right. We'll keep improving!",
 };
 
 /**
@@ -34,7 +34,7 @@ async function startFeedback(phone) {
         "🥤 How was the drink we included with your order?\nRate it 1–5:"
       );
       await setCustomerState(phone, 'awaiting_feedback');
-      await sendMessage(phone, "Want to order again? Reply ORDER anytime 🛵");
+      await sendMessage(phone, "Hi! Want to order again? Reply ORDER anytime 🛵");
     } catch (err) {
       console.error('[feedback] delayed drink prompt failed for', phone, ':', err.message);
     }
@@ -62,7 +62,7 @@ async function handleFeedback(customer, body) {
 
   const drinkMsg = RATING_RESPONSES[drinkRating] || "Thanks!";
   await sendMessage(phone, `🥤 Drink: ${drinkMsg}\nThanks for the feedback! See you next time 👋`);
-  await setCustomerState(phone, 'idle');
+  await setCustomerState(phone, 'completed');
 }
 
 module.exports = { startFeedback, handleFeedback };
