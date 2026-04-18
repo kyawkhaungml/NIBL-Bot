@@ -23,7 +23,7 @@ const RATING_RESPONSES = {
 async function startFeedback(phone) {
   await sendMessage(
     phone,
-    "🙌 Thanks for using NIBL!\nHope you enjoyed the order — see you next time 👋"
+    "Hi, your order was dropped off!\n🙌 Thanks for using NIBL!\nHope you enjoyed the order — see you next time 👋"
   );
   await setCustomerState(phone, 'idle');
 

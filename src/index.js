@@ -12,6 +12,7 @@ const { handleImage, handleAddressSubmission, handleCustomerStatusQuery } = requ
 const { handleFeedback } = require('./flows/feedback');
 const { handleOperatorMessage } = require('./flows/operator');
 const { isAdmin, ADMINS } = require('./admins');
+const { getClaimant } = require('./claims');
 const { handleDealReply } = require('./flows/reengagement');
 
 // Start scheduler (registers cron jobs)
@@ -81,7 +82,8 @@ async function handleInbound(body) {
   // If one admin has claimed this customer, only they receive the forward.
   // Otherwise broadcast to all admins (unclaimed conversation).
   const shortFrom = from.replace('whatsapp:', '');
-  const forwardTo = ADMINS;
+  const claimant = getClaimant(from);
+  const forwardTo = claimant ? [claimant] : ADMINS;
 
   let forwardMsg;
   if (mediaUrls.length > 0) {
@@ -202,7 +204,7 @@ async function handleInbound(body) {
       const urlLines = mediaUrls.length === 1
         ? `📸 Image received: ${mediaUrls[0]}`
         : mediaUrls.map((u, i) => `📸 Image received ${i + 1}: ${u}`).join('\n');
-      const recipients = ADMINS;
+      const recipients = claimant ? [claimant] : ADMINS;
       recipients.forEach(admin =>
         sendMessage(admin, `📨 [CUSTOMER: ${shortFrom}]\n${urlLines}\n⚠️ State: ${state} — not processed as order screenshot`)
           .catch(err => console.error('[webhook] state-image note failed:', err.message))

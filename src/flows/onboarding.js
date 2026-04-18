@@ -36,7 +36,7 @@ async function handleInvited(customer) {
   const phone = customer.phone;
 
   await sendMessages(phone, [
-    'Welcome to NIBL 🎉 You\'re in!',
+    'Welcome to NIBL 🎉 You\'re in!\n📲 Save this number as NIBL in your contacts so you always know it\'s us!',
 
     `Here's how it works:
 1.Order on DoorDash or Uber Eats (Pickup Only, Not Delivery!)

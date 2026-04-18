@@ -10,6 +10,7 @@ const {
 } = require('../db');
 const { sendMessage } = require('../whatsapp');
 const { ADMINS } = require('../admins');
+const { getClaimant } = require('../claims');
 
 const STATUS_MESSAGES = {
   screenshot_received:     '📥 We received your screenshot and are reviewing it!',
@@ -58,7 +59,8 @@ async function handleImage(customer, mediaUrls) {
     `SSCHECKED ${shortPhone}\n` +
     `BADSS ${shortPhone}`;
 
-  const recipients = ADMINS;
+  const claimant = getClaimant(phone);
+  const recipients = claimant ? [claimant] : ADMINS;
   await Promise.all(recipients.map(admin => sendMessage(admin, caption)));
 }
 
@@ -80,7 +82,8 @@ async function handleAddressSubmission(customer, body) {
     `Customer: ${shortPhone}\n` +
     `Address: ${address}\n\n` +
     `CHECKAD ${shortPhone}\n` +
-    `BADAD ${shortPhone}`;
+    `BADAD ${shortPhone}`+
+    `VALIDAD ${shortPhone}`;
   await Promise.all(ADMINS.map(admin => sendMessage(admin, adminMsg)));
 }
 
