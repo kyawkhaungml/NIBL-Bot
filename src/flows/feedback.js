@@ -18,7 +18,7 @@ const RATING_RESPONSES = {
 
 /**
  * Called by operator flow when an order is marked as delivered.
- * Sends thank you immediately, then schedules the drink rating prompt for 30 min later.
+ * Sends thank you immediately, then schedules the drink rating prompt for 10 min later.
  */
 async function startFeedback(phone) {
   await sendMessage(
@@ -38,7 +38,7 @@ async function startFeedback(phone) {
     } catch (err) {
       console.error('[feedback] delayed drink prompt failed for', phone, ':', err.message);
     }
-  }, 30 * 60 * 1000); // 30 minutes
+  }, 10 * 60 * 1000); // 10 minutes
 }
 
 /**
@@ -61,8 +61,26 @@ async function handleFeedback(customer, body) {
   }
 
   const drinkMsg = RATING_RESPONSES[drinkRating] || "Thanks!";
-  await sendMessage(phone, `🥤 Drink: ${drinkMsg}\nThanks for the feedback! See you next time 👋`);
+  await sendMessage(phone, `🥤 Drink: ${drinkMsg}`);
+  await sendMessage(phone, "Would you purchase this drink on your own? Reply YES or NO 🛒");
+  await setCustomerState(phone, 'awaiting_drink_purchase');
+}
+
+/**
+ * Customer replies YES or NO to the drink purchase question.
+ * state: awaiting_drink_purchase
+ */
+async function handleDrinkPurchase(customer, body) {
+  const phone = customer.phone;
+  const answer = body.trim().toUpperCase();
+
+  if (answer !== 'YES' && answer !== 'NO') {
+    await sendMessage(phone, "Please reply YES or NO — would you purchase this drink on your own? 🛒");
+    return;
+  }
+
+  await sendMessage(phone, "Thanks for the feedback! See you next time 👋");
   await setCustomerState(phone, 'completed');
 }
 
-module.exports = { startFeedback, handleFeedback };
+module.exports = { startFeedback, handleFeedback, handleDrinkPurchase };

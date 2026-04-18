@@ -9,7 +9,7 @@ const { getCustomerByPhone, upsertCustomer, ensureReferralCode, setCustomerState
 const { sendMessage } = require('./whatsapp');
 const { handleInvited } = require('./flows/onboarding');
 const { handleImage, handleAddressSubmission, handleCustomerStatusQuery } = require('./flows/order');
-const { handleFeedback } = require('./flows/feedback');
+const { handleFeedback, handleDrinkPurchase } = require('./flows/feedback');
 const { handleOperatorMessage } = require('./flows/operator');
 const { isAdmin, ADMINS } = require('./admins');
 const { getClaimant } = require('./claims');
@@ -170,7 +170,7 @@ async function handleInbound(body) {
       return;
     }
     const orderState = customer.state || 'idle';
-    const repeatableStates = ['idle', 'awaiting_feedback', 'address_rejected', 'completed'];
+    const repeatableStates = ['idle', 'awaiting_feedback', 'awaiting_drink_purchase', 'address_rejected', 'completed'];
     if (repeatableStates.includes(orderState)) {
       await sendMessage(
         from,
@@ -247,6 +247,9 @@ async function handleInbound(body) {
 
     case 'awaiting_feedback':
       return handleFeedback(customer, msgBody);
+
+    case 'awaiting_drink_purchase':
+      return handleDrinkPurchase(customer, msgBody);
 
     case 'idle':
     case 'completed':
