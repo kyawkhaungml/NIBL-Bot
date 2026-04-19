@@ -40,12 +40,17 @@ async function handleInvited(customer) {
 
     `Here's how it works:
 1.Order on DoorDash or Uber Eats (Pickup Only, Not Delivery!)
+
 2.Screenshot the full order (items + total + address)
+
 3.Send it here
+
 We'll pick it up and deliver it to you for free
-🥤 Your first order includes a free drink
-After that, we'll include drinks only when they match your order
+
+🥤 Every order includes a free drink
+
 Once you send your order, we'll confirm + send an ETA.
+
 ⚠️ Limited slots per time window`,
     
     "Whenever you're ready, type ORDER to place your first order 🛵",
