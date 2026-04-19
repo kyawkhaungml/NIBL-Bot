@@ -82,7 +82,7 @@ async function handleAddressSubmission(customer, body) {
     `Customer: ${shortPhone}\n` +
     `Address: ${address}\n\n` +
     `CHECKAD ${shortPhone}\n` +
-    `BADAD ${shortPhone}`+
+    `BADAD ${shortPhone}\n`+
     `VALIDAD ${shortPhone}`;
   await Promise.all(ADMINS.map(admin => sendMessage(admin, adminMsg)));
 }
