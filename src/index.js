@@ -174,7 +174,7 @@ async function handleInbound(body) {
     if (repeatableStates.includes(orderState)) {
       await sendMessage(
         from,
-        "Let's run another order! 🎉\nWhat's your delivery address? 📍\n(If it's the same as last time, just type it again)"
+        "Let's run your order! 🎉\nWhat's your delivery address? 📍"
       );
       await setCustomerState(from, 'awaiting_address');
       const lastAddress = customer.address || 'N/A';
