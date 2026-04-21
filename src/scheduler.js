@@ -30,10 +30,11 @@ cron.schedule('0 18 * * *', async () => {
     const lastActive = c.last_active_at ? new Date(c.last_active_at).getTime() : 0;
     const daysSince = (now - lastActive) / MS_PER_DAY;
 
-    if (daysSince >= 14) {
+    // re-engagement nudges disabled
+    if (false && daysSince >= 14) {
       await send14DayNudge(c);
       nudged14++;
-    } else if (daysSince >= 7) {
+    } else if (false && daysSince >= 7) {
       await send7DayNudge(c);
       nudged7++;
     }
